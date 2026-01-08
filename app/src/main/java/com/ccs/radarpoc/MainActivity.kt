@@ -3,137 +3,90 @@ package com.ccs.radarpoc
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
-import android.util.Log
 import android.view.View
-import android.widget.*
+import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import com.autel.common.CallbackWithNoParam
-import com.autel.common.CallbackWithOneParamProgress
-import com.autel.common.error.AutelError
-import com.autel.common.mission.AutelCoordinate3D
-import com.autel.common.mission.MissionType
-import com.autel.common.mission.evo.WaypointHeadingMode
-import com.autel.common.mission.evo.WaypointType
-import com.autel.common.mission.evo2.Evo2Waypoint
-import com.autel.common.mission.evo2.Evo2WaypointFinishedAction
-import com.autel.common.mission.evo2.Evo2WaypointMission
-import com.autel.sdk.Autel
-import com.autel.sdk.ProductConnectListener
-import com.autel.sdk.product.BaseProduct
-import com.autel.sdk.video.AutelCodec
+import androidx.lifecycle.repeatOnLifecycle
 import com.autel.sdk.widget.AutelCodecView
 import com.ccs.radarpoc.data.AppSettings
-import com.ccs.radarpoc.data.RadarTrack
-import com.ccs.radarpoc.data.RadarTracksResponse
-import com.ccs.radarpoc.network.RadarApiClient
+import com.ccs.radarpoc.databinding.ActivityMainBinding
+import com.ccs.radarpoc.ui.main.*
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import kotlinx.coroutines.launch
-import java.util.UUID
 
+/**
+ * Main Activity - Thin UI layer that observes ViewModel state
+ */
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
-    private val TAG = "MainActivity"
-    
-    // View mode enum
-    enum class ViewMode {
-        MAP, CAMERA, SPLIT
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val DEFAULT_ZOOM = 15f
+        private const val DEFAULT_LAT = 30.0444  // Cairo, Egypt
+        private const val DEFAULT_LNG = 31.2357
     }
     
-    // UI Components
-    private lateinit var statusBar: LinearLayout
-    private lateinit var radarStatus: TextView
-    private lateinit var droneStatus: TextView
-    private lateinit var cameraStatus: TextView
-    private lateinit var settingsButton: ImageButton
+    // View Binding
+    private lateinit var binding: ActivityMainBinding
     
-    private lateinit var contentContainer: FrameLayout
-    private lateinit var cameraContainer: FrameLayout
-    private lateinit var pipCameraContainer: FrameLayout
-    private lateinit var lockedTrackIndicator: TextView
-    
-    private lateinit var btnMapMode: Button
-    private lateinit var btnCameraMode: Button
-    private lateinit var btnSplitMode: Button
+    // ViewModel
+    private val viewModel: MainViewModel by viewModels {
+        MainViewModelFactory(AppSettings(this))
+    }
     
     // Google Maps
     private var googleMap: GoogleMap? = null
     private val trackMarkers = mutableMapOf<String, Marker>()
     
-    // Drone SDK
-    private var autelProduct: BaseProduct? = null
-    private var autelCodec: AutelCodec? = null
+    // Camera Views
     private var mainCameraView: AutelCodecView? = null
     private var pipCameraView: AutelCodecView? = null
     
-    // Radar API
-    private lateinit var appSettings: AppSettings
-    private var radarApiClient: RadarApiClient? = null
-    private val currentTracks = mutableMapOf<String, RadarTrack>()
-    private var lockedTrack: RadarTrack? = null
-    
-    // State
-    private var currentViewMode = ViewMode.MAP
-    private var isRadarConnected = false
-    private var isDroneConnected = false
-    private var isCameraStreaming = false
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         
-        appSettings = AppSettings(this)
-        
-        initViews()
-        setupListeners()
+        setupClickListeners()
         setupGoogleMaps()
-        setupDroneSDK()
-        startRadarPolling()
-        
-        // Set initial view mode
-        setViewMode(ViewMode.MAP)
+        setupDroneCamera()
+        observeState()
+        observeNavigation()
     }
     
-    private fun initViews() {
-        statusBar = findViewById(R.id.statusBar)
-        radarStatus = findViewById(R.id.radarStatus)
-        droneStatus = findViewById(R.id.droneStatus)
-        cameraStatus = findViewById(R.id.cameraStatus)
-        settingsButton = findViewById(R.id.settingsButton)
-        
-        contentContainer = findViewById(R.id.contentContainer)
-        cameraContainer = findViewById(R.id.cameraContainer)
-        pipCameraContainer = findViewById(R.id.pipCameraContainer)
-        lockedTrackIndicator = findViewById(R.id.lockedTrackIndicator)
-        
-        btnMapMode = findViewById(R.id.btnMapMode)
-        btnCameraMode = findViewById(R.id.btnCameraMode)
-        btnSplitMode = findViewById(R.id.btnSplitMode)
-    }
-    
-    private fun setupListeners() {
-        settingsButton.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
+    /**
+     * Setup click listeners for UI elements
+     */
+    private fun setupClickListeners() {
+        binding.settingsButton.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.SettingsClicked)
         }
         
-        btnMapMode.setOnClickListener {
-            setViewMode(ViewMode.MAP)
+        binding.btnMapMode.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.MAP))
         }
         
-        btnCameraMode.setOnClickListener {
-            setViewMode(ViewMode.CAMERA)
+        binding.btnCameraMode.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.CAMERA))
         }
         
-        btnSplitMode.setOnClickListener {
-            setViewMode(ViewMode.SPLIT)
+        binding.btnSplitMode.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.SPLIT))
         }
     }
     
+    /**
+     * Setup Google Maps
+     */
     private fun setupGoogleMaps() {
         val mapFragment = supportFragmentManager
             .findFragmentById(R.id.mapFragment) as SupportMapFragment
@@ -143,9 +96,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         
-        // Set default location (Cairo, Egypt)
-        val defaultLocation = LatLng(30.0444, 31.2357)
-        googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 15f))
+        // Set default location
+        val defaultLocation = LatLng(DEFAULT_LAT, DEFAULT_LNG)
+        googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, DEFAULT_ZOOM))
         
         // Enable zoom controls
         googleMap?.uiSettings?.isZoomControlsEnabled = true
@@ -160,187 +113,78 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
     
-    private fun setupDroneSDK() {
-        // Register product connection listener
-        Autel.setProductConnectListener(object : ProductConnectListener {
-            override fun productConnected(product: BaseProduct?) {
-                Log.d(TAG, "Drone connected")
-                autelProduct = product
-                isDroneConnected = true
-                updateDroneStatus()
-                
-                // Get codec for camera feed
-                autelCodec = product?.codec
-                initializeCameraFeed()
-            }
-            
-            override fun productDisconnected() {
-                Log.d(TAG, "Drone disconnected")
-                autelProduct = null
-                autelCodec = null
-                isDroneConnected = false
-                isCameraStreaming = false
-                updateDroneStatus()
-                updateCameraStatus()
-                cleanupCameraFeed()
-            }
-        })
-    }
-    
-    private fun initializeCameraFeed() {
-        runOnUiThread {
-            if (autelCodec != null) {
-                // Create main camera view
-                mainCameraView = AutelCodecView(this).apply {
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                    )
+    /**
+     * Setup drone camera callbacks
+     */
+    private fun setupDroneCamera() {
+        viewModel.getDroneRepository().setCameraCallbacks(
+            onReady = { codec ->
+                runOnUiThread {
+                    initializeCameraViews()
                 }
-                
-                // Create PiP camera view
-                pipCameraView = AutelCodecView(this).apply {
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                    )
-                }
-                
-                isCameraStreaming = true
-                updateCameraStatus()
-                
-                // Update camera views based on current mode
-                updateCameraViews()
-            }
-        }
-    }
-    
-    private fun cleanupCameraFeed() {
-        runOnUiThread {
-            cameraContainer.removeAllViews()
-            pipCameraContainer.removeAllViews()
-            mainCameraView = null
-            pipCameraView = null
-        }
-    }
-    
-    private fun updateCameraViews() {
-        runOnUiThread {
-            when (currentViewMode) {
-                ViewMode.MAP -> {
-                    cameraContainer.removeAllViews()
-                    cameraContainer.visibility = View.GONE
-                    pipCameraContainer.visibility = View.GONE
-                }
-                ViewMode.CAMERA -> {
-                    pipCameraContainer.removeAllViews()
-                    pipCameraContainer.visibility = View.GONE
-                    cameraContainer.removeAllViews()
-                    mainCameraView?.let { cameraContainer.addView(it) }
-                    cameraContainer.visibility = View.VISIBLE
-                }
-                ViewMode.SPLIT -> {
-                    cameraContainer.removeAllViews()
-                    cameraContainer.visibility = View.GONE
-                    pipCameraContainer.removeAllViews()
-                    pipCameraView?.let { pipCameraContainer.addView(it) }
-                    pipCameraContainer.visibility = View.VISIBLE
+            },
+            onDisconnected = {
+                runOnUiThread {
+                    cleanupCameraViews()
                 }
             }
-        }
-    }
-    
-    private fun startRadarPolling() {
-        radarApiClient?.stopPolling()
-        
-        radarApiClient = RadarApiClient(
-            appSettings.radarBaseUrl,
-            appSettings.pollInterval
         )
-        
-        radarApiClient?.setListener(object : RadarApiClient.RadarDataListener {
-            override fun onTracksReceived(tracks: RadarTracksResponse) {
-                processRadarTracks(tracks.result)
-            }
-            
-            override fun onError(error: String) {
-                Log.e(TAG, "Radar error: $error")
-            }
-            
-            override fun onConnectionStatusChanged(isConnected: Boolean) {
-                isRadarConnected = isConnected
-                updateRadarStatus()
-            }
-        })
-        
-        radarApiClient?.startPolling(lifecycleScope)
     }
     
-    private fun processRadarTracks(tracks: List<RadarTrack>) {
-        val now = System.currentTimeMillis()
-        val staleTimeoutMs = appSettings.staleTimeout * 1000L
-        
-        // Update stale status
-        tracks.forEach { track ->
-            track.isStale = (now - track.timestamp) > staleTimeoutMs
-            currentTracks[track.id] = track
+    /**
+     * Initialize camera views
+     */
+    private fun initializeCameraViews() {
+        mainCameraView = AutelCodecView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
         }
         
-        // Remove tracks not in the latest update
-        val trackIds = tracks.map { it.id }.toSet()
-        val toRemove = currentTracks.keys.filter { it !in trackIds }
-        toRemove.forEach { currentTracks.remove(it) }
-        
-        // Update map markers
-        updateMapMarkers()
-        
-        // Send locked track GPS to drone
-        lockedTrack?.let { track ->
-            if (track.id in currentTracks) {
-                val updatedTrack = currentTracks[track.id]!!
-                sendGPSToDrone(updatedTrack)
-            }
+        pipCameraView = AutelCodecView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
         }
+        
+        updateCameraViews(viewModel.uiState.value.viewMode)
     }
     
-    private fun updateMapMarkers() {
-        runOnUiThread {
-            googleMap?.let { map ->
-                // Remove markers for tracks that no longer exist
-                val currentTrackIds = currentTracks.keys
-                val markersToRemove = trackMarkers.keys.filter { it !in currentTrackIds }
-                markersToRemove.forEach { id ->
-                    trackMarkers[id]?.remove()
-                    trackMarkers.remove(id)
+    /**
+     * Cleanup camera views
+     */
+    private fun cleanupCameraViews() {
+        binding.cameraContainer.removeAllViews()
+        binding.pipCameraContainer.removeAllViews()
+        mainCameraView = null
+        pipCameraView = null
+    }
+    
+    /**
+     * Observe ViewModel state
+     */
+    private fun observeState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    updateUI(state)
                 }
-                
-                // Add or update markers
-                currentTracks.values.forEach { track ->
-                    val position = LatLng(track.geolocation.latitude, track.geolocation.longitude)
-                    
-                    val markerColor = when {
-                        track.isLocked -> BitmapDescriptorFactory.HUE_ORANGE
-                        track.isStale -> BitmapDescriptorFactory.HUE_AZURE
-                        else -> BitmapDescriptorFactory.HUE_BLUE
-                    }
-                    
-                    val marker = trackMarkers[track.id]
-                    if (marker != null) {
-                        // Update existing marker
-                        marker.position = position
-                        marker.setIcon(BitmapDescriptorFactory.defaultMarker(markerColor))
-                        marker.title = "Track ${track.id}${if (track.isLocked) " [LOCKED]" else ""}${if (track.isStale) " (Stale)" else ""}"
-                    } else {
-                        // Create new marker
-                        val newMarker = map.addMarker(
-                            MarkerOptions()
-                                .position(position)
-                                .title("Track ${track.id}${if (track.isLocked) " [LOCKED]" else ""}${if (track.isStale) " (Stale)" else ""}")
-                                .icon(BitmapDescriptorFactory.defaultMarker(markerColor))
-                        )
-                        newMarker?.tag = track.id
-                        if (newMarker != null) {
-                            trackMarkers[track.id] = newMarker
+            }
+        }
+    }
+    
+    /**
+     * Observe navigation events
+     */
+    private fun observeNavigation() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.navigationEvent.collect { event ->
+                    when (event) {
+                        is NavigationEvent.OpenSettings -> {
+                            startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
                         }
                     }
                 }
@@ -348,29 +192,180 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
     
-    private fun showTrackContextMenu(trackId: String) {
-        val track = currentTracks[trackId] ?: return
+    /**
+     * Update UI based on state
+     */
+    private fun updateUI(state: MainUiState) {
+        updateStatusBar(state)
+        updateViewMode(state.viewMode)
+        updateMapMarkers(state.tracks)
+        updateLockedTrackIndicator(state)
+        handleToast(state.toastMessage)
+        handleError(state.errorMessage)
+    }
+    
+    /**
+     * Update status bar with connection states
+     */
+    private fun updateStatusBar(state: MainUiState) {
+        binding.radarStatus.text = when (state.radarState) {
+            is ConnectionState.Connected -> "🟢 Radar: Connected"
+            is ConnectionState.Connecting -> "🟡 Radar: Connecting..."
+            is ConnectionState.Disconnected -> "🔴 Radar: Disconnected"
+            is ConnectionState.Error -> "🔴 Radar: Error"
+        }
         
-        val options = if (track.isLocked) {
+        binding.droneStatus.text = when (state.droneState) {
+            is ConnectionState.Connected -> "🟢 Drone: Connected"
+            is ConnectionState.Connecting -> "🟡 Drone: Connecting..."
+            is ConnectionState.Disconnected -> "🔴 Drone: Disconnected"
+            is ConnectionState.Error -> "🔴 Drone: Error"
+        }
+        
+        binding.cameraStatus.text = when (state.cameraState) {
+            is ConnectionState.Connected -> "🟢 Camera: Streaming"
+            is ConnectionState.Connecting -> "🟡 Camera: Starting..."
+            is ConnectionState.Disconnected -> "🔴 Camera: Off"
+            is ConnectionState.Error -> "🔴 Camera: Error"
+        }
+    }
+    
+    /**
+     * Update view mode (Map, Camera, Split)
+     */
+    private fun updateViewMode(mode: ViewMode) {
+        // Update button backgrounds
+        binding.btnMapMode.setBackgroundColor(
+            if (mode == ViewMode.MAP) Color.LTGRAY else Color.TRANSPARENT
+        )
+        binding.btnCameraMode.setBackgroundColor(
+            if (mode == ViewMode.CAMERA) Color.LTGRAY else Color.TRANSPARENT
+        )
+        binding.btnSplitMode.setBackgroundColor(
+            if (mode == ViewMode.SPLIT) Color.LTGRAY else Color.TRANSPARENT
+        )
+        
+        // Update camera views
+        updateCameraViews(mode)
+    }
+    
+    /**
+     * Update camera container visibility based on view mode
+     */
+    private fun updateCameraViews(mode: ViewMode) {
+        when (mode) {
+            ViewMode.MAP -> {
+                binding.cameraContainer.removeAllViews()
+                binding.cameraContainer.visibility = View.GONE
+                binding.pipCameraContainer.visibility = View.GONE
+            }
+            ViewMode.CAMERA -> {
+                binding.pipCameraContainer.removeAllViews()
+                binding.pipCameraContainer.visibility = View.GONE
+                binding.cameraContainer.removeAllViews()
+                mainCameraView?.let { binding.cameraContainer.addView(it) }
+                binding.cameraContainer.visibility = View.VISIBLE
+            }
+            ViewMode.SPLIT -> {
+                binding.cameraContainer.removeAllViews()
+                binding.cameraContainer.visibility = View.GONE
+                binding.pipCameraContainer.removeAllViews()
+                pipCameraView?.let { binding.pipCameraContainer.addView(it) }
+                binding.pipCameraContainer.visibility = View.VISIBLE
+            }
+        }
+    }
+    
+    /**
+     * Update map markers based on tracks
+     */
+    private fun updateMapMarkers(tracks: List<TrackUiModel>) {
+        googleMap?.let { map ->
+            // Remove markers for tracks that no longer exist
+            val currentTrackIds = tracks.map { it.id }.toSet()
+            val markersToRemove = trackMarkers.keys.filter { it !in currentTrackIds }
+            markersToRemove.forEach { id ->
+                trackMarkers[id]?.remove()
+                trackMarkers.remove(id)
+            }
+            
+            // Add or update markers
+            tracks.forEach { trackUi ->
+                val position = LatLng(trackUi.latitude, trackUi.longitude)
+                
+                val markerColor = when {
+                    trackUi.isLocked -> BitmapDescriptorFactory.HUE_ORANGE
+                    trackUi.isStale -> BitmapDescriptorFactory.HUE_AZURE
+                    else -> BitmapDescriptorFactory.HUE_BLUE
+                }
+                
+                val marker = trackMarkers[trackUi.id]
+                if (marker != null) {
+                    // Update existing marker
+                    marker.position = position
+                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(markerColor))
+                    marker.title = trackUi.displayTitle
+                } else {
+                    // Create new marker
+                    val newMarker = map.addMarker(
+                        MarkerOptions()
+                            .position(position)
+                            .title(trackUi.displayTitle)
+                            .icon(BitmapDescriptorFactory.defaultMarker(markerColor))
+                    )
+                    newMarker?.tag = trackUi.id
+                    if (newMarker != null) {
+                        trackMarkers[trackUi.id] = newMarker
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Update locked track indicator
+     */
+    private fun updateLockedTrackIndicator(state: MainUiState) {
+        val lockedTrack = state.lockedTrack
+        if (lockedTrack != null && state.viewMode == ViewMode.CAMERA) {
+            binding.lockedTrackIndicator.text = "Locked: Track ${lockedTrack.id}"
+            binding.lockedTrackIndicator.visibility = View.VISIBLE
+        } else {
+            binding.lockedTrackIndicator.visibility = View.GONE
+        }
+    }
+    
+    /**
+     * Show track context menu
+     */
+    private fun showTrackContextMenu(trackId: String) {
+        val trackUi = viewModel.getTrackById(trackId) ?: return
+        
+        val options = if (trackUi.isLocked) {
             arrayOf("Show Info", "Unlock")
         } else {
             arrayOf("Show Info", "Lock")
         }
         
         AlertDialog.Builder(this)
-            .setTitle("Track ${track.id}")
+            .setTitle("Track ${trackUi.id}")
             .setItems(options) { _, which ->
                 when (options[which]) {
-                    "Show Info" -> showTrackInfo(track)
-                    "Lock" -> lockTrack(track)
-                    "Unlock" -> unlockTrack()
+                    "Show Info" -> showTrackInfo(trackUi)
+                    "Lock" -> viewModel.onEvent(MainUiEvent.TrackLocked(trackId))
+                    "Unlock" -> viewModel.onEvent(MainUiEvent.TrackUnlocked)
                 }
             }
             .show()
     }
     
-    private fun showTrackInfo(track: RadarTrack) {
+    /**
+     * Show track information dialog
+     */
+    private fun showTrackInfo(trackUi: TrackUiModel) {
+        val track = trackUi.track
         val topClassification = track.stats.classifications.maxByOrNull { it.confidence }
+        
         val info = """
             Track ID: ${track.id}
             
@@ -390,7 +385,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             Classification:
             ${topClassification?.type ?: "Unknown"} (${String.format("%.1f", (topClassification?.confidence ?: 0.0) * 100)}%)
             
-            Status: ${if (track.isStale) "STALE" else "Active"}
+            Status: ${if (trackUi.isStale) "STALE" else "Active"}
         """.trimIndent()
         
         AlertDialog.Builder(this)
@@ -400,172 +395,39 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             .show()
     }
     
-    private fun lockTrack(track: RadarTrack) {
-        // Unlock previous track if any
-        lockedTrack?.isLocked = false
-        
-        // Lock new track
-        track.isLocked = true
-        lockedTrack = track
-        
-        // Update UI
-        updateMapMarkers()
-        updateLockedTrackIndicator()
-        
-        Toast.makeText(this, "Locked Track ${track.id}", Toast.LENGTH_SHORT).show()
-    }
-    
-    private fun unlockTrack() {
-        lockedTrack?.isLocked = false
-        lockedTrack = null
-        
-        // Update UI
-        updateMapMarkers()
-        updateLockedTrackIndicator()
-        
-        Toast.makeText(this, "Track unlocked", Toast.LENGTH_SHORT).show()
-    }
-    
-    private fun updateLockedTrackIndicator() {
-        runOnUiThread {
-            if (lockedTrack != null) {
-                lockedTrackIndicator.text = "Locked: Track ${lockedTrack?.id}"
-                lockedTrackIndicator.visibility = if (currentViewMode == ViewMode.CAMERA) View.VISIBLE else View.GONE
-            } else {
-                lockedTrackIndicator.visibility = View.GONE
-            }
+    /**
+     * Handle toast messages
+     */
+    private fun handleToast(message: String?) {
+        message?.let {
+            Toast.makeText(this, it, Toast.LENGTH_SHORT).show()
+            viewModel.onEvent(MainUiEvent.ToastShown)
         }
     }
     
-    private fun sendGPSToDrone(track: RadarTrack) {
-        if (!isDroneConnected || autelProduct == null) return
-        
-        try {
-            // Get the mission manager
-            val missionManager = autelProduct?.getMissionManager()
-            if (missionManager == null) {
-                Log.e(TAG, "Mission manager not available")
-                return
-            }
-            
-            // Create a simple mission with single waypoint to track the target
-            val mission = Evo2WaypointMission()
-            mission.missionId = 1
-            mission.missionType = MissionType.Waypoint
-            mission.altitudeType = 1 // 0=relative, 1=absolute altitude
-            mission.MissionName = "RadarTrack_${track.id}"
-            mission.GUID = UUID.randomUUID().toString().replace("-", "")
-            mission.missionAction = 0 // Normal flight
-            
-            // Create waypoint at track location
-            val waypoint = Evo2Waypoint(
-                AutelCoordinate3D(
-                    track.geolocation.latitude,
-                    track.geolocation.longitude,
-                    track.geolocation.altitude
-                )
-            )
-            waypoint.wSpeed = 5.0f // Speed in m/s
-            waypoint.poiIndex = -1 // No POI
-            waypoint.hoverTime = 5 // Hover for 5 seconds at target
-            waypoint.headingMode = WaypointHeadingMode.CUSTOM_DIRECTION
-            waypoint.waypointType = WaypointType.HOVER
-            waypoint.actions = emptyList()
-            
-            mission.wpList = listOf(waypoint)
-            mission.finishedAction = Evo2WaypointFinishedAction.RETURN_HOME
-            
-            // Prepare and start mission
-            missionManager.prepareMission(mission, object : CallbackWithOneParamProgress<Boolean> {
-                override fun onProgress(progress: Float) {
-                    Log.d(TAG, "Mission preparation progress: $progress")
-                }
-                
-                override fun onSuccess(result: Boolean?) {
-                    Log.d(TAG, "Mission prepared successfully, starting mission")
-                    
-                    // Start the mission
-                    missionManager.startMission(object : CallbackWithNoParam {
-                        override fun onSuccess() {
-                            Log.d(TAG, "GPS waypoint mission started: ${track.geolocation.latitude}, ${track.geolocation.longitude}, alt: ${track.geolocation.altitude}")
-                            runOnUiThread {
-                                Toast.makeText(this@MainActivity, "Drone tracking Track ${track.id}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        
-                        override fun onFailure(error: AutelError?) {
-                            Log.e(TAG, "Failed to start mission: ${error?.description}")
-                        }
-                    })
-                }
-                
-                override fun onFailure(error: AutelError?) {
-                    Log.e(TAG, "Failed to prepare mission: ${error?.description}")
-                }
-            })
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending GPS to drone: ${e.message}", e)
-        }
-    }
-    
-    private fun setViewMode(mode: ViewMode) {
-        currentViewMode = mode
-        
-        // Update button states
-        btnMapMode.setBackgroundColor(if (mode == ViewMode.MAP) Color.LTGRAY else Color.TRANSPARENT)
-        btnCameraMode.setBackgroundColor(if (mode == ViewMode.CAMERA) Color.LTGRAY else Color.TRANSPARENT)
-        btnSplitMode.setBackgroundColor(if (mode == ViewMode.SPLIT) Color.LTGRAY else Color.TRANSPARENT)
-        
-        // Update views
-        updateCameraViews()
-        updateLockedTrackIndicator()
-    }
-    
-    private fun updateRadarStatus() {
-        runOnUiThread {
-            radarStatus.text = if (isRadarConnected) {
-                "🟢 Radar: Connected"
-            } else {
-                "🔴 Radar: Disconnected"
-            }
-        }
-    }
-    
-    private fun updateDroneStatus() {
-        runOnUiThread {
-            droneStatus.text = if (isDroneConnected) {
-                "🟢 Drone: Connected"
-            } else {
-                "🔴 Drone: Disconnected"
-            }
-        }
-    }
-    
-    private fun updateCameraStatus() {
-        runOnUiThread {
-            cameraStatus.text = when {
-                isCameraStreaming -> "🟢 Camera: Streaming"
-                else -> "🔴 Camera: Off"
-            }
+    /**
+     * Handle error messages
+     */
+    private fun handleError(message: String?) {
+        // Could show a Snackbar or dialog for errors
+        // For now, just log it
+        message?.let {
+            viewModel.onEvent(MainUiEvent.ErrorDismissed)
         }
     }
     
     override fun onResume() {
         super.onResume()
-        // Restart polling with updated settings
-        startRadarPolling()
+        viewModel.startRadarPolling()
     }
     
     override fun onPause() {
         super.onPause()
-        radarApiClient?.stopPolling()
+        viewModel.stopRadarPolling()
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        radarApiClient?.stopPolling()
-        cleanupCameraFeed()
-        autelCodec?.cancel()
+        cleanupCameraViews()
     }
 }
