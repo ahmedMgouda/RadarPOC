@@ -12,6 +12,15 @@ enum class ViewMode {
 }
 
 /**
+ * Represents which view is currently in fullscreen
+ */
+enum class FullscreenTarget {
+    NONE,
+    MAP,
+    CAMERA
+}
+
+/**
  * Represents the connection state of a component
  */
 sealed class ConnectionState {
@@ -51,7 +60,7 @@ data class TrackUiModel(
 data class MainUiState(
     // View mode
     val viewMode: ViewMode = ViewMode.MAP,
-    val isFullScreen: Boolean = false,
+    val fullscreenTarget: FullscreenTarget = FullscreenTarget.NONE,
     
     // Connection states
     val radarState: ConnectionState = ConnectionState.Disconnected,
@@ -67,6 +76,12 @@ data class MainUiState(
     val errorMessage: String? = null,
     val toastMessage: String? = null
 ) {
+    /**
+     * Check if in fullscreen mode
+     */
+    val isFullScreen: Boolean
+        get() = fullscreenTarget != FullscreenTarget.NONE
+    
     /**
      * Get the currently locked track
      */
@@ -103,7 +118,8 @@ data class MainUiState(
  */
 sealed class MainUiEvent {
     data class ViewModeChanged(val mode: ViewMode) : MainUiEvent()
-    object ToggleFullScreen : MainUiEvent()
+    data class FullscreenChanged(val target: FullscreenTarget) : MainUiEvent()
+    object ExitFullscreen : MainUiEvent()
     data class TrackSelected(val trackId: String) : MainUiEvent()
     data class TrackLocked(val trackId: String) : MainUiEvent()
     object TrackUnlocked : MainUiEvent()
