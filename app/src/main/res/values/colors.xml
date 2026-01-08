@@ -8,6 +8,11 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     
+    <!-- Theme Colors -->
+    <color name="primary">#FF1976D2</color>
+    <color name="primary_dark">#FF1565C0</color>
+    <color name="accent">#FFFF5722</color>
+    
     <!-- RadarPOC Colors -->
     <color name="status_bar_bg">#FF1976D2</color>
     <color name="toolbar_bg">#FF424242</color>
