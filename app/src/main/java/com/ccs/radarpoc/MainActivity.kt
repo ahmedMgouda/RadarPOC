@@ -3,12 +3,19 @@ package com.ccs.radarpoc
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -33,6 +40,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val DEFAULT_ZOOM = 15f
         private const val DEFAULT_LAT = 30.0444  // Cairo, Egypt
         private const val DEFAULT_LNG = 31.2357
+        private const val FULLSCREEN_UI_HIDE_DELAY = 3000L
     }
     
     // View Binding
@@ -51,16 +59,36 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private var mainCameraView: AutelCodecView? = null
     private var pipCameraView: AutelCodecView? = null
     
+    // Fullscreen UI auto-hide handler
+    private val hideHandler = Handler(Looper.getMainLooper())
+    private val hideRunnable = Runnable { hideFullscreenUI() }
+    
+    // Window insets controller for immersive mode
+    private lateinit var windowInsetsController: WindowInsetsControllerCompat
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
+        setupWindowInsetsController()
         setupClickListeners()
+        setupFullscreenListeners()
+        setupBackPressHandler()
         setupGoogleMaps()
         setupDroneCamera()
         observeState()
         observeNavigation()
+    }
+    
+    /**
+     * Setup window insets controller for immersive mode
+     */
+    private fun setupWindowInsetsController() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        windowInsetsController = WindowInsetsControllerCompat(window, binding.root)
+        windowInsetsController.systemBarsBehavior = 
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
     
     /**
@@ -82,6 +110,61 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         binding.btnSplitMode.setOnClickListener {
             viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.SPLIT))
         }
+    }
+    
+    /**
+     * Setup fullscreen-related click listeners
+     */
+    private fun setupFullscreenListeners() {
+        // Map fullscreen button
+        binding.btnMapFullscreen.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.FullscreenChanged(FullscreenTarget.MAP))
+        }
+        
+        // Camera fullscreen button
+        binding.btnCameraFullscreen.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.FullscreenChanged(FullscreenTarget.CAMERA))
+        }
+        
+        // PiP expand button
+        binding.btnExpandPip.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.FullscreenChanged(FullscreenTarget.CAMERA))
+        }
+        
+        // Exit fullscreen button
+        binding.btnExitFullscreen.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ExitFullscreen)
+        }
+        
+        // Tap on map container to show/hide UI in fullscreen
+        binding.mapContainer.setOnClickListener {
+            if (viewModel.uiState.value.isFullScreen) {
+                toggleFullscreenUI()
+            }
+        }
+        
+        // Tap on camera container to show/hide UI in fullscreen
+        binding.cameraContainer.setOnClickListener {
+            if (viewModel.uiState.value.isFullScreen) {
+                toggleFullscreenUI()
+            }
+        }
+    }
+    
+    /**
+     * Setup back press handler for fullscreen exit
+     */
+    private fun setupBackPressHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (viewModel.uiState.value.isFullScreen) {
+                    viewModel.onEvent(MainUiEvent.ExitFullscreen)
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
     }
     
     /**
@@ -110,6 +193,13 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 showTrackContextMenu(trackId)
             }
             true
+        }
+        
+        // Double tap for fullscreen
+        googleMap?.setOnMapClickListener {
+            if (viewModel.uiState.value.isFullScreen) {
+                toggleFullscreenUI()
+            }
         }
     }
     
@@ -149,7 +239,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             )
         }
         
-        updateCameraViews(viewModel.uiState.value.viewMode)
+        updateCameraViews(viewModel.uiState.value)
     }
     
     /**
@@ -197,7 +287,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun updateUI(state: MainUiState) {
         updateStatusBar(state)
-        updateViewMode(state.viewMode)
+        updateViewMode(state)
+        updateFullscreenMode(state)
         updateMapMarkers(state.tracks)
         updateLockedTrackIndicator(state)
         handleToast(state.toastMessage)
@@ -209,31 +300,33 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun updateStatusBar(state: MainUiState) {
         binding.radarStatus.text = when (state.radarState) {
-            is ConnectionState.Connected -> "🟢 Radar: Connected"
-            is ConnectionState.Connecting -> "🟡 Radar: Connecting..."
-            is ConnectionState.Disconnected -> "🔴 Radar: Disconnected"
-            is ConnectionState.Error -> "🔴 Radar: Error"
+            is ConnectionState.Connected -> getString(R.string.status_radar_connected)
+            is ConnectionState.Connecting -> getString(R.string.status_radar_connecting)
+            is ConnectionState.Disconnected -> getString(R.string.status_radar_disconnected)
+            is ConnectionState.Error -> getString(R.string.status_radar_error)
         }
         
         binding.droneStatus.text = when (state.droneState) {
-            is ConnectionState.Connected -> "🟢 Drone: Connected"
-            is ConnectionState.Connecting -> "🟡 Drone: Connecting..."
-            is ConnectionState.Disconnected -> "🔴 Drone: Disconnected"
-            is ConnectionState.Error -> "🔴 Drone: Error"
+            is ConnectionState.Connected -> getString(R.string.status_drone_connected)
+            is ConnectionState.Connecting -> getString(R.string.status_drone_connecting)
+            is ConnectionState.Disconnected -> getString(R.string.status_drone_disconnected)
+            is ConnectionState.Error -> getString(R.string.status_drone_error)
         }
         
         binding.cameraStatus.text = when (state.cameraState) {
-            is ConnectionState.Connected -> "🟢 Camera: Streaming"
-            is ConnectionState.Connecting -> "🟡 Camera: Starting..."
-            is ConnectionState.Disconnected -> "🔴 Camera: Off"
-            is ConnectionState.Error -> "🔴 Camera: Error"
+            is ConnectionState.Connected -> getString(R.string.status_camera_streaming)
+            is ConnectionState.Connecting -> getString(R.string.status_camera_starting)
+            is ConnectionState.Disconnected -> getString(R.string.status_camera_off)
+            is ConnectionState.Error -> getString(R.string.status_camera_error)
         }
     }
     
     /**
      * Update view mode (Map, Camera, Split)
      */
-    private fun updateViewMode(mode: ViewMode) {
+    private fun updateViewMode(state: MainUiState) {
+        val mode = state.viewMode
+        
         // Update button backgrounds
         binding.btnMapMode.setBackgroundColor(
             if (mode == ViewMode.MAP) Color.LTGRAY else Color.TRANSPARENT
@@ -246,27 +339,50 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         )
         
         // Update camera views
-        updateCameraViews(mode)
+        updateCameraViews(state)
     }
     
     /**
      * Update camera container visibility based on view mode
      */
-    private fun updateCameraViews(mode: ViewMode) {
-        when (mode) {
-            ViewMode.MAP -> {
+    private fun updateCameraViews(state: MainUiState) {
+        val mode = state.viewMode
+        val fullscreenTarget = state.fullscreenTarget
+        
+        when {
+            // Fullscreen camera mode
+            fullscreenTarget == FullscreenTarget.CAMERA -> {
+                binding.mapContainer.visibility = View.GONE
+                binding.cameraContainer.removeAllViews()
+                mainCameraView?.let { binding.cameraContainer.addView(it) }
+                binding.cameraContainer.visibility = View.VISIBLE
+                binding.pipCameraContainer.visibility = View.GONE
+            }
+            // Fullscreen map mode
+            fullscreenTarget == FullscreenTarget.MAP -> {
+                binding.mapContainer.visibility = View.VISIBLE
+                binding.cameraContainer.visibility = View.GONE
+                binding.pipCameraContainer.visibility = View.GONE
+            }
+            // Normal MAP mode
+            mode == ViewMode.MAP -> {
+                binding.mapContainer.visibility = View.VISIBLE
                 binding.cameraContainer.removeAllViews()
                 binding.cameraContainer.visibility = View.GONE
                 binding.pipCameraContainer.visibility = View.GONE
             }
-            ViewMode.CAMERA -> {
+            // Normal CAMERA mode
+            mode == ViewMode.CAMERA -> {
+                binding.mapContainer.visibility = View.GONE
                 binding.pipCameraContainer.removeAllViews()
                 binding.pipCameraContainer.visibility = View.GONE
                 binding.cameraContainer.removeAllViews()
                 mainCameraView?.let { binding.cameraContainer.addView(it) }
                 binding.cameraContainer.visibility = View.VISIBLE
             }
-            ViewMode.SPLIT -> {
+            // SPLIT mode
+            mode == ViewMode.SPLIT -> {
+                binding.mapContainer.visibility = View.VISIBLE
                 binding.cameraContainer.removeAllViews()
                 binding.cameraContainer.visibility = View.GONE
                 binding.pipCameraContainer.removeAllViews()
@@ -274,6 +390,110 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 binding.pipCameraContainer.visibility = View.VISIBLE
             }
         }
+        
+        // Update fullscreen button visibility
+        binding.btnMapFullscreen.visibility = 
+            if (mode == ViewMode.MAP && !state.isFullScreen) View.VISIBLE else View.GONE
+        binding.btnCameraFullscreen.visibility = 
+            if (mode == ViewMode.CAMERA && !state.isFullScreen) View.VISIBLE else View.GONE
+    }
+    
+    /**
+     * Update fullscreen mode UI
+     */
+    private fun updateFullscreenMode(state: MainUiState) {
+        if (state.isFullScreen) {
+            enterFullscreen()
+        } else {
+            exitFullscreen()
+        }
+    }
+    
+    /**
+     * Enter fullscreen mode
+     */
+    private fun enterFullscreen() {
+        // Hide status bar and bottom toolbar
+        binding.statusBar.visibility = View.GONE
+        binding.bottomToolbar.visibility = View.GONE
+        
+        // Show exit fullscreen button
+        binding.btnExitFullscreen.visibility = View.VISIBLE
+        
+        // Enter immersive mode
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        
+        // Keep screen on
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
+        // Schedule UI hide
+        scheduleFullscreenUIHide()
+    }
+    
+    /**
+     * Exit fullscreen mode
+     */
+    private fun exitFullscreen() {
+        // Show status bar and bottom toolbar
+        binding.statusBar.visibility = View.VISIBLE
+        binding.bottomToolbar.visibility = View.VISIBLE
+        
+        // Hide exit fullscreen button
+        binding.btnExitFullscreen.visibility = View.GONE
+        
+        // Exit immersive mode
+        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+        
+        // Allow screen to turn off
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
+        // Cancel any pending hide
+        hideHandler.removeCallbacks(hideRunnable)
+    }
+    
+    /**
+     * Toggle fullscreen UI visibility
+     */
+    private fun toggleFullscreenUI() {
+        if (binding.btnExitFullscreen.visibility == View.VISIBLE) {
+            hideFullscreenUI()
+        } else {
+            showFullscreenUI()
+        }
+    }
+    
+    /**
+     * Show fullscreen UI controls
+     */
+    private fun showFullscreenUI() {
+        binding.btnExitFullscreen.visibility = View.VISIBLE
+        binding.btnExitFullscreen.animate()
+            .alpha(1f)
+            .setDuration(200)
+            .start()
+        
+        scheduleFullscreenUIHide()
+    }
+    
+    /**
+     * Hide fullscreen UI controls
+     */
+    private fun hideFullscreenUI() {
+        binding.btnExitFullscreen.animate()
+            .alpha(0f)
+            .setDuration(200)
+            .withEndAction {
+                binding.btnExitFullscreen.visibility = View.INVISIBLE
+            }
+            .start()
+    }
+    
+    /**
+     * Schedule hiding fullscreen UI after delay
+     */
+    private fun scheduleFullscreenUIHide() {
+        hideHandler.removeCallbacks(hideRunnable)
+        hideHandler.postDelayed(hideRunnable, FULLSCREEN_UI_HIDE_DELAY)
     }
     
     /**
@@ -327,8 +547,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun updateLockedTrackIndicator(state: MainUiState) {
         val lockedTrack = state.lockedTrack
-        if (lockedTrack != null && state.viewMode == ViewMode.CAMERA) {
-            binding.lockedTrackIndicator.text = "Locked: Track ${lockedTrack.id}"
+        val showIndicator = lockedTrack != null && 
+            (state.viewMode == ViewMode.CAMERA || state.fullscreenTarget == FullscreenTarget.CAMERA)
+        
+        if (showIndicator && lockedTrack != null) {
+            binding.lockedTrackIndicator.text = getString(R.string.track_locked, lockedTrack.id)
             binding.lockedTrackIndicator.visibility = View.VISIBLE
         } else {
             binding.lockedTrackIndicator.visibility = View.GONE
@@ -342,18 +565,23 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         val trackUi = viewModel.getTrackById(trackId) ?: return
         
         val options = if (trackUi.isLocked) {
-            arrayOf("Show Info", "Unlock")
+            arrayOf(getString(R.string.track_info), getString(R.string.track_unlock))
         } else {
-            arrayOf("Show Info", "Lock")
+            arrayOf(getString(R.string.track_info), getString(R.string.track_lock))
         }
         
         AlertDialog.Builder(this)
             .setTitle("Track ${trackUi.id}")
             .setItems(options) { _, which ->
-                when (options[which]) {
-                    "Show Info" -> showTrackInfo(trackUi)
-                    "Lock" -> viewModel.onEvent(MainUiEvent.TrackLocked(trackId))
-                    "Unlock" -> viewModel.onEvent(MainUiEvent.TrackUnlocked)
+                when (which) {
+                    0 -> showTrackInfo(trackUi)
+                    1 -> {
+                        if (trackUi.isLocked) {
+                            viewModel.onEvent(MainUiEvent.TrackUnlocked)
+                        } else {
+                            viewModel.onEvent(MainUiEvent.TrackLocked(trackId))
+                        }
+                    }
                 }
             }
             .show()
@@ -385,13 +613,13 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             Classification:
             ${topClassification?.type ?: "Unknown"} (${String.format("%.1f", (topClassification?.confidence ?: 0.0) * 100)}%)
             
-            Status: ${if (trackUi.isStale) "STALE" else "Active"}
+            Status: ${if (trackUi.isStale) getString(R.string.track_info_status_stale) else getString(R.string.track_info_status_active)}
         """.trimIndent()
         
         AlertDialog.Builder(this)
-            .setTitle("Track ${track.id} Info")
+            .setTitle(getString(R.string.track_info_title, track.id))
             .setMessage(info)
-            .setPositiveButton("OK", null)
+            .setPositiveButton(getString(R.string.dialog_ok), null)
             .show()
     }
     
@@ -409,8 +637,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
      * Handle error messages
      */
     private fun handleError(message: String?) {
-        // Could show a Snackbar or dialog for errors
-        // For now, just log it
         message?.let {
             viewModel.onEvent(MainUiEvent.ErrorDismissed)
         }
@@ -424,10 +650,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onPause() {
         super.onPause()
         viewModel.stopRadarPolling()
+        hideHandler.removeCallbacks(hideRunnable)
     }
     
     override fun onDestroy() {
         super.onDestroy()
         cleanupCameraViews()
+        hideHandler.removeCallbacks(hideRunnable)
     }
 }
