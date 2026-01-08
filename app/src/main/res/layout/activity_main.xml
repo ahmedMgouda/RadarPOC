@@ -2,8 +2,10 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@android:color/black"
     tools:context=".MainActivity">
 
     <!-- Status Bar -->
@@ -52,8 +54,8 @@
             android:layout_height="32dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_preferences"
-            android:tint="@android:color/white"
-            android:contentDescription="Settings" />
+            app:tint="@android:color/white"
+            android:contentDescription="@string/settings" />
     </LinearLayout>
 
     <!-- Content Container -->
@@ -67,13 +69,33 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <!-- Map Container -->
-        <fragment
-            android:id="@+id/mapFragment"
-            android:name="com.google.android.gms.maps.SupportMapFragment"
+        <FrameLayout
+            android:id="@+id/mapContainer"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent">
+            
+            <fragment
+                android:id="@+id/mapFragment"
+                android:name="com.google.android.gms.maps.SupportMapFragment"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+            
+            <!-- Fullscreen button for Map -->
+            <ImageButton
+                android:id="@+id/btnMapFullscreen"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="16dp"
+                android:background="@drawable/bg_fullscreen_button"
+                android:src="@drawable/ic_fullscreen"
+                android:padding="12dp"
+                app:tint="@android:color/white"
+                android:contentDescription="@string/fullscreen_map"
+                android:elevation="4dp" />
+        </FrameLayout>
 
-        <!-- Camera Container -->
+        <!-- Camera Container (Full screen camera mode) -->
         <FrameLayout
             android:id="@+id/cameraContainer"
             android:layout_width="match_parent"
@@ -82,34 +104,81 @@
             
             <!-- Camera feed will be added here programmatically -->
             
+            <!-- Fullscreen button for Camera -->
+            <ImageButton
+                android:id="@+id/btnCameraFullscreen"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="16dp"
+                android:background="@drawable/bg_fullscreen_button"
+                android:src="@drawable/ic_fullscreen"
+                android:padding="12dp"
+                app:tint="@android:color/white"
+                android:contentDescription="@string/fullscreen_camera"
+                android:elevation="4dp" />
+            
             <!-- Locked Track Indicator for Camera Mode -->
             <TextView
                 android:id="@+id/lockedTrackIndicator"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
                 android:layout_margin="16dp"
                 android:padding="8dp"
-                android:background="#CC000000"
+                android:background="@drawable/bg_locked_indicator"
                 android:textColor="@android:color/white"
                 android:textStyle="bold"
                 android:visibility="gone"
-                tools:text="Locked: Track 357" />
+                tools:text="🔒 Locked: Track 357" />
         </FrameLayout>
 
-        <!-- Split View Container (for PiP camera in map mode) -->
+        <!-- PiP Camera Container (for split view) -->
         <FrameLayout
             android:id="@+id/pipCameraContainer"
             android:layout_width="200dp"
             android:layout_height="150dp"
             android:layout_gravity="bottom|end"
             android:layout_margin="16dp"
-            android:background="@android:color/black"
+            android:background="@drawable/bg_pip_container"
             android:visibility="gone"
-            android:elevation="4dp">
+            android:elevation="8dp"
+            android:clickable="true"
+            android:focusable="true">
             
             <!-- PiP camera feed will be added here programmatically -->
+            
+            <!-- Expand PiP button -->
+            <ImageButton
+                android:id="@+id/btnExpandPip"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="4dp"
+                android:background="@drawable/bg_pip_button"
+                android:src="@drawable/ic_fullscreen"
+                android:padding="6dp"
+                app:tint="@android:color/white"
+                android:contentDescription="@string/expand_pip"
+                android:elevation="2dp" />
         </FrameLayout>
     </FrameLayout>
+
+    <!-- Floating Exit Fullscreen Button (shown only in fullscreen mode) -->
+    <ImageButton
+        android:id="@+id/btnExitFullscreen"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_margin="16dp"
+        android:background="@drawable/bg_exit_fullscreen_button"
+        android:src="@drawable/ic_fullscreen_exit"
+        android:padding="14dp"
+        app:tint="@android:color/white"
+        android:contentDescription="@string/exit_fullscreen"
+        android:elevation="8dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <!-- Bottom Toolbar -->
     <LinearLayout
@@ -128,7 +197,7 @@
             android:layout_width="0dp"
             android:layout_height="56dp"
             android:layout_weight="1"
-            android:text="🗺 Map"
+            android:text="@string/mode_map"
             android:textAllCaps="false"
             style="?attr/borderlessButtonStyle" />
 
@@ -137,7 +206,7 @@
             android:layout_width="0dp"
             android:layout_height="56dp"
             android:layout_weight="1"
-            android:text="🎥 Camera"
+            android:text="@string/mode_camera"
             android:textAllCaps="false"
             style="?attr/borderlessButtonStyle" />
 
@@ -146,7 +215,7 @@
             android:layout_width="0dp"
             android:layout_height="56dp"
             android:layout_weight="1"
-            android:text="🗺+🎥 Both"
+            android:text="@string/mode_split"
             android:textAllCaps="false"
             style="?attr/borderlessButtonStyle" />
     </LinearLayout>
