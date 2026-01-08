@@ -29,12 +29,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11  // Updated
-        targetCompatibility = JavaVersion.VERSION_11  // Updated
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "11"  // Updated
+        jvmTarget = "11"
     }
 
     buildFeatures {
@@ -73,6 +73,12 @@ dependencies {
     // ViewModel and LiveData
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+    
+    // Activity KTX - Required for viewModels() delegate
+    implementation("androidx.activity:activity-ktx:1.8.2")
+    
+    // Fragment KTX (optional but useful)
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
 
     // Autel SDK
     implementation(files("libs/autel-sdk-release.aar"))
