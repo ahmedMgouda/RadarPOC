@@ -195,7 +195,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             true
         }
         
-        // Double tap for fullscreen
+        // Tap on map to toggle fullscreen UI
         googleMap?.setOnMapClickListener {
             if (viewModel.uiState.value.isFullScreen) {
                 toggleFullscreenUI()
@@ -547,10 +547,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun updateLockedTrackIndicator(state: MainUiState) {
         val lockedTrack = state.lockedTrack
-        val showIndicator = lockedTrack != null && 
-            (state.viewMode == ViewMode.CAMERA || state.fullscreenTarget == FullscreenTarget.CAMERA)
+        val isInCameraMode = state.viewMode == ViewMode.CAMERA || 
+            state.fullscreenTarget == FullscreenTarget.CAMERA
         
-        if (showIndicator && lockedTrack != null) {
+        if (lockedTrack != null && isInCameraMode) {
             binding.lockedTrackIndicator.text = getString(R.string.track_locked, lockedTrack.id)
             binding.lockedTrackIndicator.visibility = View.VISIBLE
         } else {
