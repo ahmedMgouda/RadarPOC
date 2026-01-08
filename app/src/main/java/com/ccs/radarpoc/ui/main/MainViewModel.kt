@@ -135,11 +135,20 @@ class MainViewModel(
     fun onEvent(event: MainUiEvent) {
         when (event) {
             is MainUiEvent.ViewModeChanged -> {
-                _uiState.update { it.copy(viewMode = event.mode) }
+                _uiState.update { 
+                    it.copy(
+                        viewMode = event.mode,
+                        fullscreenTarget = FullscreenTarget.NONE // Exit fullscreen when changing mode
+                    )
+                }
             }
             
-            is MainUiEvent.ToggleFullScreen -> {
-                _uiState.update { it.copy(isFullScreen = !it.isFullScreen) }
+            is MainUiEvent.FullscreenChanged -> {
+                _uiState.update { it.copy(fullscreenTarget = event.target) }
+            }
+            
+            is MainUiEvent.ExitFullscreen -> {
+                _uiState.update { it.copy(fullscreenTarget = FullscreenTarget.NONE) }
             }
             
             is MainUiEvent.TrackSelected -> {
