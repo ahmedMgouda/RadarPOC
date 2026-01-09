@@ -4,6 +4,7 @@ import android.util.Log
 import com.autel.common.CallbackWithNoParam
 import com.autel.common.CallbackWithOneParam
 import com.autel.common.CallbackWithOneParamProgress
+import com.autel.common.battery.evo.EvoChargeState
 import com.autel.common.error.AutelError
 import com.autel.common.flycontroller.evo.EvoFlyControllerInfo
 import com.autel.common.mission.AutelCoordinate3D
@@ -57,8 +58,22 @@ enum class TrackingState {
 }
 
 /**
+ * Battery state data
+ */
+data class DroneBatteryState(
+    val percentage: Int,          // 0-100
+    val voltage: Float,           // Volts
+    val temperature: Float,       // Celsius
+    val isCharging: Boolean,
+    val remainingFlightTime: Int  // Seconds
+) {
+    val isLow: Boolean get() = percentage <= 20
+    val isCritical: Boolean get() = percentage <= 10
+}
+
+/**
  * Repository for drone operations
- * Handles connection, camera feed, and GPS commands
+ * Handles connection, camera feed, GPS commands, and battery monitoring
  */
 class DroneRepository(
     private val missionUpdateIntervalMs: Long = 3000L,      // Minimum time between mission updates
@@ -98,6 +113,10 @@ class DroneRepository(
     private val _droneLocation = MutableStateFlow<DroneLocation?>(null)
     val droneLocation: StateFlow<DroneLocation?> = _droneLocation.asStateFlow()
     
+    // Battery state
+    private val _batteryState = MutableStateFlow<DroneBatteryState?>(null)
+    val batteryState: StateFlow<DroneBatteryState?> = _batteryState.asStateFlow()
+    
     // Product reference
     private var autelProduct: BaseProduct? = null
     private var autelCodec: AutelCodec? = null
@@ -124,6 +143,9 @@ class DroneRepository(
                 
                 // Start tracking drone GPS location
                 startDroneGpsTracking(product)
+                
+                // Start battery monitoring
+                startBatteryMonitoring(product)
             }
             
             override fun productDisconnected() {
@@ -133,6 +155,7 @@ class DroneRepository(
                 _isConnected.value = false
                 _isCameraStreaming.value = false
                 _trackingState.value = TrackingState.IDLE
+                _batteryState.value = null
                 currentMissionId = null
                 lastSentTarget = null
                 onCameraDisconnected?.invoke()
@@ -419,6 +442,51 @@ class DroneRepository(
             }
         })
     }
+    
+    /**
+     * Start battery monitoring
+     */
+    private fun startBatteryMonitoring(product: BaseProduct?) {
+        val battery = (product as? Evo2Aircraft)?.battery
+        
+        battery?.setBatteryStateListener { batteryState ->
+            try {
+                val percentage = batteryState?.remainPowerPercent ?: 0
+                val voltage = batteryState?.voltage ?: 0f
+                val temperature = batteryState?.temperature ?: 0f
+                val isCharging = batteryState?.chargeState == EvoChargeState.CHARGING
+                val remainingTime = batteryState?.remainingFlightTime ?: 0
+                
+                _batteryState.value = DroneBatteryState(
+                    percentage = percentage,
+                    voltage = voltage,
+                    temperature = temperature,
+                    isCharging = isCharging,
+                    remainingFlightTime = remainingTime
+                )
+                
+                Log.d(TAG, "Battery: $percentage%, ${voltage}V, ${temperature}°C, remaining: ${remainingTime}s")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing battery state: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Get current battery percentage
+     * @return Battery percentage (0-100) or null if not available
+     */
+    fun getBatteryPercentage(): Int? = _batteryState.value?.percentage
+    
+    /**
+     * Check if battery is low (≤20%)
+     */
+    fun isBatteryLow(): Boolean = _batteryState.value?.isLow == true
+    
+    /**
+     * Check if battery is critical (≤10%)
+     */
+    fun isBatteryCritical(): Boolean = _batteryState.value?.isCritical == true
     
     /**
      * Check if currently tracking a target
