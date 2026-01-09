@@ -38,16 +38,18 @@
     </FrameLayout>
 
     <!-- PiP Window (Draggable) -->
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/pipContainer"
         android:layout_width="160dp"
         android:layout_height="120dp"
         android:layout_margin="16dp"
         android:layout_gravity="top|start"
-        android:elevation="8dp"
         android:visibility="gone"
-        app:cardCornerRadius="8dp"
-        app:cardBackgroundColor="@android:color/black">
+        app:cardElevation="8dp"
+        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="@android:color/black"
+        app:strokeWidth="2dp"
+        app:strokeColor="#66FFFFFF">
 
         <!-- PiP Content (Camera or Map) -->
         <FrameLayout
@@ -55,130 +57,137 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- PiP Border Overlay -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/bg_pip_border" />
-
-    </androidx.cardview.widget.CardView>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Top Bar (Collapsible, Transparent) -->
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="8dp"
-        android:background="@drawable/bg_top_bar_gradient">
+        android:background="@drawable/bg_top_bar_gradient"
+        android:paddingVertical="4dp"
+        app:contentInsetStart="8dp"
+        app:contentInsetEnd="8dp">
 
-        <!-- Collapse Button -->
-        <ImageButton
-            android:id="@+id/btnCollapseTopBar"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_icon_button"
-            android:src="@drawable/ic_chevron_up"
-            android:scaleType="centerInside"
-            android:padding="8dp"
-            app:tint="@android:color/white"
-            android:contentDescription="@string/collapse_top_bar" />
-
-        <!-- Status Indicators -->
         <LinearLayout
-            android:id="@+id/statusIndicators"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="8dp">
+            android:gravity="center_vertical">
 
-            <!-- Radar Status Dot -->
-            <View
-                android:id="@+id/radarStatusDot"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:background="@drawable/bg_status_dot_disconnected" />
+            <!-- Collapse Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCollapseTopBar"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:padding="0dp"
+                app:icon="@drawable/ic_chevron_up"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="@android:color/white"
+                app:iconSize="24dp"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:contentDescription="@string/collapse_top_bar" />
 
-            <!-- Drone Status Dot -->
-            <View
-                android:id="@+id/droneStatusDot"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="6dp"
-                android:background="@drawable/bg_status_dot_disconnected" />
-
-            <!-- Camera Status Dot -->
-            <View
-                android:id="@+id/cameraStatusDot"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="6dp"
-                android:background="@drawable/bg_status_dot_disconnected" />
-
-            <!-- Track Count -->
-            <TextView
-                android:id="@+id/trackCount"
-                android:layout_width="wrap_content"
+            <!-- Status Indicators -->
+            <LinearLayout
+                android:id="@+id/statusIndicators"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                tools:text="5" />
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp">
 
-            <!-- Battery Indicator -->
-            <TextView
-                android:id="@+id/batteryIndicator"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                tools:text="🔋 85%" />
+                <!-- Radar Status Dot -->
+                <View
+                    android:id="@+id/radarStatusDot"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/bg_status_dot_disconnected" />
+
+                <!-- Drone Status Dot -->
+                <View
+                    android:id="@+id/droneStatusDot"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_status_dot_disconnected" />
+
+                <!-- Camera Status Dot -->
+                <View
+                    android:id="@+id/cameraStatusDot"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_status_dot_disconnected" />
+
+                <!-- Track Count Badge -->
+                <com.google.android.material.badge.BadgeDrawable
+                    android:id="@+id/trackBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/trackCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:drawableStart="@drawable/ic_track"
+                    android:drawablePadding="4dp"
+                    tools:text="5" />
+
+            </LinearLayout>
+
+            <!-- Settings Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSettings"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:padding="0dp"
+                app:icon="@drawable/ic_settings"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="@android:color/white"
+                app:iconSize="24dp"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:contentDescription="@string/settings" />
 
         </LinearLayout>
 
-        <!-- Settings Button -->
-        <ImageButton
-            android:id="@+id/btnSettings"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_icon_button"
-            android:src="@drawable/ic_settings"
-            android:scaleType="centerInside"
-            android:padding="8dp"
-            app:tint="@android:color/white"
-            android:contentDescription="@string/settings" />
-
-    </LinearLayout>
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <!-- Collapsed Top Bar Tab (shown when top bar is hidden) -->
-    <LinearLayout
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/topBarCollapsedTab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="4dp"
-        android:background="@drawable/bg_collapsed_tab"
-        android:visibility="gone">
+        android:visibility="gone"
+        app:cardCornerRadius="0dp"
+        app:cardBackgroundColor="#99000000"
+        app:strokeWidth="0dp"
+        app:cardElevation="4dp"
+        android:clickable="true"
+        android:focusable="true">
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="48dp"
+            android:layout_height="24dp"
+            android:padding="4dp"
             android:src="@drawable/ic_chevron_down"
             app:tint="@android:color/white"
             android:contentDescription="@string/expand_top_bar" />
 
-    </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Bottom Floating Controls -->
     <FrameLayout
@@ -188,63 +197,37 @@
         android:layout_gravity="bottom"
         android:padding="16dp">
 
-        <!-- Show PiP Button (left side, shown when PiP is hidden) -->
-        <ImageButton
+        <!-- Show PiP FAB (left side, shown when PiP is hidden) -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btnShowPip"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="start|bottom"
-            android:background="@drawable/bg_floating_button"
-            android:src="@drawable/ic_camera"
-            android:scaleType="centerInside"
-            android:padding="12dp"
-            app:tint="@android:color/white"
             android:visibility="gone"
+            android:src="@drawable/ic_camera"
+            app:fabSize="normal"
+            app:backgroundTint="#CC000000"
+            app:tint="@android:color/white"
             android:contentDescription="@string/show_camera"
             tools:visibility="visible" />
 
         <!-- Locked Track Chip (right side, shown when track is locked) -->
-        <LinearLayout
+        <com.google.android.material.chip.Chip
             android:id="@+id/lockedTrackChip"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="end|bottom"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/bg_locked_chip"
-            android:paddingStart="12dp"
-            android:paddingEnd="4dp"
             android:visibility="gone"
-            tools:visibility="visible">
-
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:src="@drawable/ic_lock"
-                app:tint="@android:color/white" />
-
-            <TextView
-                android:id="@+id/lockedTrackText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                tools:text="Track 357" />
-
-            <ImageButton
-                android:id="@+id/btnUnlockTrack"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:layout_marginStart="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_close"
-                android:scaleType="centerInside"
-                android:padding="8dp"
-                app:tint="@android:color/white"
-                android:contentDescription="@string/track_unlock" />
-
-        </LinearLayout>
+            app:chipIcon="@drawable/ic_lock"
+            app:chipIconTint="@android:color/white"
+            app:closeIconVisible="true"
+            app:closeIconTint="@android:color/white"
+            app:chipBackgroundColor="#CC000000"
+            app:chipStrokeWidth="0dp"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            tools:text="Track 357"
+            tools:visibility="visible" />
 
     </FrameLayout>
 
@@ -259,14 +242,12 @@
         android:elevation="16dp"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
         app:behavior_hideable="true"
-        app:behavior_peekHeight="80dp">
+        app:behavior_peekHeight="100dp">
 
         <!-- Drag Handle -->
-        <View
-            android:layout_width="40dp"
-            android:layout_height="4dp"
-            android:layout_gravity="center_horizontal"
-            android:background="@drawable/bg_drag_handle" />
+        <com.google.android.material.bottomsheet.BottomSheetDragHandleView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
         <!-- Peek Content (always visible when sheet is shown) -->
         <LinearLayout
@@ -275,7 +256,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingTop="12dp">
+            android:paddingTop="8dp">
 
             <!-- Track Title -->
             <TextView
@@ -284,30 +265,40 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textColor="@android:color/white"
-                android:textSize="16sp"
+                android:textSize="18sp"
                 android:textStyle="bold"
                 tools:text="Track 357" />
 
             <!-- Lock Button -->
-            <ImageButton
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnLockTrack"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_icon_button"
-                android:src="@drawable/ic_lock_open"
-                android:padding="8dp"
-                app:tint="@android:color/white"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:padding="0dp"
+                app:icon="@drawable/ic_lock_open"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="@android:color/white"
+                app:iconSize="24dp"
+                style="@style/Widget.Material3.Button.IconButton"
                 android:contentDescription="@string/track_lock" />
 
             <!-- Close Button -->
-            <ImageButton
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCloseTrackInfo"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_icon_button"
-                android:src="@drawable/ic_close"
-                android:padding="8dp"
-                app:tint="@android:color/white"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:padding="0dp"
+                app:icon="@drawable/ic_close"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="@android:color/white"
+                app:iconSize="24dp"
+                style="@style/Widget.Material3.Button.IconButton"
                 android:contentDescription="@string/dialog_cancel" />
 
         </LinearLayout>
@@ -319,7 +310,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:textColor="#B0FFFFFF"
-            android:textSize="13sp"
+            android:textSize="14sp"
             tools:text="📍 30.04°, 31.23°  📏 120m  💨 15m/s" />
 
         <!-- Expanded Content (visible when pulled up) -->
@@ -331,19 +322,21 @@
             android:paddingTop="16dp">
 
             <!-- Divider -->
-            <View
+            <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#33FFFFFF" />
+                android:layout_height="wrap_content"
+                app:dividerColor="#33FFFFFF" />
 
             <!-- Position Section -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="16dp"
                 android:text="@string/track_info_position"
                 android:textColor="#80FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
 
             <TextView
                 android:id="@+id/trackInfoPosition"
@@ -351,17 +344,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textColor="@android:color/white"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 tools:text="30.044400°, 31.235700°" />
 
             <!-- Movement Section -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="16dp"
                 android:text="@string/track_info_movement"
                 android:textColor="#80FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
 
             <TextView
                 android:id="@+id/trackInfoMovement"
@@ -369,17 +364,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textColor="@android:color/white"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 tools:text="Alt: 120m  Speed: 15m/s  Heading: 45°" />
 
             <!-- Radar Section -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="16dp"
                 android:text="@string/track_info_radar_data"
                 android:textColor="#80FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
 
             <TextView
                 android:id="@+id/trackInfoRadar"
@@ -387,17 +384,19 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textColor="@android:color/white"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 tools:text="Range: 1.2km  Azimuth: 32°" />
 
             <!-- Classification Section -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="16dp"
                 android:text="@string/track_info_classification"
                 android:textColor="#80FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
 
             <TextView
                 android:id="@+id/trackInfoClassification"
@@ -405,25 +404,26 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textColor="@android:color/white"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 tools:text="Drone (85%)" />
 
             <!-- Divider -->
-            <View
+            <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
-                android:layout_height="1dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:background="#33FFFFFF" />
+                app:dividerColor="#33FFFFFF" />
 
             <!-- Action Button -->
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCenterOnTrack"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="16dp"
                 android:text="@string/center_on_map"
-                android:textColor="@android:color/white"
-                android:background="@drawable/bg_outlined_button" />
+                app:icon="@drawable/ic_center"
+                app:iconGravity="textStart"
+                style="@style/Widget.Material3.Button.OutlinedButton" />
 
         </LinearLayout>
 
