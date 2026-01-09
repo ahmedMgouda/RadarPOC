@@ -61,9 +61,10 @@ enum class TrackingState {
  * Handles connection, camera feed, and GPS commands
  */
 class DroneRepository(
-    private val missionUpdateIntervalMs: Long = 3000L,  // Minimum time between mission updates
-    private val minimumDistanceMeters: Double = 5.0     // Minimum distance change to trigger update
+    missionUpdateIntervalSeconds: Int = 3  // Minimum time between mission updates
 ) {
+    private val missionUpdateIntervalMs = missionUpdateIntervalSeconds * 1000L
+    private val minimumDistanceMeters = 5.0  // Minimum distance change to trigger update
     companion object {
         private const val TAG = "DroneRepository"
         private const val DEFAULT_DRONE_SPEED = 5.0f
@@ -386,13 +387,13 @@ class DroneRepository(
             poiIndex = -1
             hoverTime = DEFAULT_HOVER_TIME
             headingMode = WaypointHeadingMode.CUSTOM_DIRECTION
-            waypointType = WaypointType.HOVER
+            waypointType = WaypointType.STANDARD
             actions = emptyList()
         }
         
         mission.wpList = listOf(waypoint)
         // Hover at end instead of RTH - we'll keep updating the target
-        mission.finishedAction = Evo2WaypointFinishedAction.HOVER
+        mission.finishedAction = Evo2WaypointFinishedAction.KEEP_ON_LAST_POINT
         
         return mission
     }

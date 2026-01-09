@@ -350,8 +350,7 @@ class MainViewModelFactory(
                 staleTimeoutSeconds = appSettings.staleTimeout
             )
             val droneRepository = DroneRepository(
-                missionUpdateIntervalMs = appSettings.missionUpdateInterval * 1000L,
-                minimumDistanceMeters = appSettings.minimumDistanceMeters
+                missionUpdateIntervalSeconds = appSettings.missionUpdateInterval
             )
             
             return MainViewModel(radarRepository, droneRepository, appSettings) as T
