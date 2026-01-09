@@ -1,5 +1,6 @@
 package com.ccs.radarpoc.ui.main
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,8 @@ import com.ccs.radarpoc.data.repository.DroneGpsTarget
 import com.ccs.radarpoc.data.repository.DroneRepository
 import com.ccs.radarpoc.data.repository.RadarRepository
 import com.ccs.radarpoc.data.repository.TrackingState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -23,6 +26,9 @@ class MainViewModel(
     
     companion object {
         private const val TAG = "MainViewModel"
+        
+        // Time to wait before auto-unlocking a stale track (milliseconds)
+        private const val STALE_AUTO_UNLOCK_DELAY_MS = 10_000L  // 10 seconds
     }
     
     // UI State
@@ -36,6 +42,12 @@ class MainViewModel(
     // Center on track event (for map)
     private val _centerOnTrackEvent = MutableSharedFlow<TrackUiModel>()
     val centerOnTrackEvent: SharedFlow<TrackUiModel> = _centerOnTrackEvent.asSharedFlow()
+    
+    // Job for stale track auto-unlock timer
+    private var staleAutoUnlockJob: Job? = null
+    
+    // Track when locked track became stale
+    private var lockedTrackStaleTimestamp: Long? = null
     
     init {
         observeRadarData()
@@ -51,6 +63,31 @@ class MainViewModel(
         viewModelScope.launch {
             radarRepository.tracks.collect { tracks ->
                 val lockedId = _uiState.value.lockedTrackId
+                
+                // P0: Check if locked track disappeared (target lost)
+                if (lockedId != null) {
+                    val lockedTrack = tracks.find { it.id == lockedId }
+                    
+                    when {
+                        // Track completely disappeared from radar
+                        lockedTrack == null -> {
+                            handleLockedTrackLost()
+                            return@collect
+                        }
+                        
+                        // P1: Track became stale
+                        lockedTrack.isStale -> {
+                            handleLockedTrackStale(lockedTrack.id)
+                        }
+                        
+                        // Track is active again (was stale, now recovered)
+                        !lockedTrack.isStale && lockedTrackStaleTimestamp != null -> {
+                            handleLockedTrackRecovered()
+                        }
+                    }
+                }
+                
+                // Build track UI models
                 val trackUiModels = tracks.map { track ->
                     TrackUiModel(
                         track = track,
@@ -60,7 +97,7 @@ class MainViewModel(
                 }
                 _uiState.update { it.copy(tracks = trackUiModels) }
                 
-                // Send GPS to drone if track is locked and not stale
+                // Send GPS to drone if track is locked and NOT stale
                 lockedId?.let { id ->
                     tracks.find { it.id == id }?.let { track ->
                         if (!track.isStale) {
@@ -88,6 +125,114 @@ class MainViewModel(
                 _uiState.update { it.copy(errorMessage = error) }
             }
         }
+    }
+    
+    /**
+     * P0: Handle when locked track completely disappears from radar
+     * This means target is lost - stop tracking and hover
+     */
+    private fun handleLockedTrackLost() {
+        val lockedId = _uiState.value.lockedTrackId ?: return
+        
+        Log.w(TAG, "Locked track $lockedId lost from radar - stopping and hovering")
+        
+        // Cancel any stale timer
+        cancelStaleAutoUnlockTimer()
+        
+        // Update UI state
+        _uiState.update { state ->
+            state.copy(
+                lockedTrackId = null,
+                lockedTrackStale = false,
+                tracks = state.tracks.map { it.copy(isLocked = false) },
+                toastMessage = "⚠️ Target lost - Drone hovering"
+            )
+        }
+        
+        // Stop drone and hover
+        droneRepository.stopTrackingAndHover(
+            onSuccess = {
+                Log.d(TAG, "Drone now hovering after target lost")
+            },
+            onError = { error ->
+                Log.e(TAG, "Failed to stop drone after target lost: $error")
+                _uiState.update { it.copy(errorMessage = "Failed to stop drone: $error") }
+            }
+        )
+    }
+    
+    /**
+     * P1: Handle when locked track becomes stale
+     * Shows warning and starts auto-unlock timer
+     */
+    private fun handleLockedTrackStale(trackId: String) {
+        // Only process once when track first becomes stale
+        if (lockedTrackStaleTimestamp != null) return
+        
+        Log.w(TAG, "Locked track $trackId became stale")
+        
+        lockedTrackStaleTimestamp = System.currentTimeMillis()
+        
+        _uiState.update { state ->
+            state.copy(
+                lockedTrackStale = true,
+                toastMessage = "⚠️ Track stale - Will auto-unlock in ${STALE_AUTO_UNLOCK_DELAY_MS / 1000}s"
+            )
+        }
+        
+        // Start auto-unlock timer
+        startStaleAutoUnlockTimer()
+    }
+    
+    /**
+     * P1: Handle when locked track recovers from stale state
+     */
+    private fun handleLockedTrackRecovered() {
+        Log.d(TAG, "Locked track recovered from stale state")
+        
+        // Cancel auto-unlock timer
+        cancelStaleAutoUnlockTimer()
+        
+        lockedTrackStaleTimestamp = null
+        
+        _uiState.update { state ->
+            state.copy(
+                lockedTrackStale = false,
+                toastMessage = "✓ Track recovered - Resuming tracking"
+            )
+        }
+    }
+    
+    /**
+     * Start timer to auto-unlock stale track
+     */
+    private fun startStaleAutoUnlockTimer() {
+        cancelStaleAutoUnlockTimer()
+        
+        staleAutoUnlockJob = viewModelScope.launch {
+            delay(STALE_AUTO_UNLOCK_DELAY_MS)
+            
+            // Check if still stale after delay
+            if (_uiState.value.lockedTrackStale && _uiState.value.lockedTrackId != null) {
+                Log.w(TAG, "Auto-unlocking stale track after timeout")
+                
+                _uiState.update { it.copy(toastMessage = "⚠️ Track stale too long - Auto-unlocking") }
+                
+                // Small delay to show the toast
+                delay(500)
+                
+                unlockTrack()
+            }
+        }
+    }
+    
+    /**
+     * Cancel stale auto-unlock timer
+     */
+    private fun cancelStaleAutoUnlockTimer() {
+        staleAutoUnlockJob?.cancel()
+        staleAutoUnlockJob = null
+        lockedTrackStaleTimestamp = null
     }
     
     /**
@@ -239,6 +384,12 @@ class MainViewModel(
     private fun lockTrack(trackId: String) {
         val track = _uiState.value.tracks.find { it.id == trackId }
         if (track != null) {
+            // Don't allow locking stale tracks
+            if (track.isStale) {
+                _uiState.update { it.copy(toastMessage = "Cannot lock stale track") }
+                return
+            }
+            
             _uiState.update { state ->
                 val updatedTracks = state.tracks.map { 
                     it.copy(isLocked = it.id == trackId)
@@ -246,9 +397,14 @@ class MainViewModel(
                 state.copy(
                     tracks = updatedTracks,
                     lockedTrackId = trackId,
+                    lockedTrackStale = false,
                     toastMessage = "Tracking ${track.displayTitle}"
                 )
             }
+            
+            // Reset stale tracking
+            lockedTrackStaleTimestamp = null
+            cancelStaleAutoUnlockTimer()
             
             // Send GPS immediately
             sendGpsToDrone(trackId)
@@ -261,12 +417,16 @@ class MainViewModel(
     private fun unlockTrack() {
         val wasLocked = _uiState.value.lockedTrackId != null
         
+        // Cancel stale timer
+        cancelStaleAutoUnlockTimer()
+        
         // Update UI state first
         _uiState.update { state ->
             val updatedTracks = state.tracks.map { it.copy(isLocked = false) }
             state.copy(
                 tracks = updatedTracks,
                 lockedTrackId = null,
+                lockedTrackStale = false,
                 toastMessage = if (wasLocked) "Track unlocked - Drone hovering" else null
             )
         }
@@ -322,6 +482,7 @@ class MainViewModel(
     
     override fun onCleared() {
         super.onCleared()
+        cancelStaleAutoUnlockTimer()
         radarRepository.stopPolling()
         droneRepository.cleanup()
     }
@@ -350,7 +511,8 @@ class MainViewModelFactory(
                 staleTimeoutSeconds = appSettings.staleTimeout
             )
             val droneRepository = DroneRepository(
-                missionUpdateIntervalSeconds = appSettings.missionUpdateInterval
+                missionUpdateIntervalMs = appSettings.missionUpdateInterval * 1000L,
+                minimumDistanceMeters = appSettings.minimumDistanceMeters
             )
             
             return MainViewModel(radarRepository, droneRepository, appSettings) as T
