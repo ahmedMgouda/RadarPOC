@@ -7,6 +7,7 @@ import com.ccs.radarpoc.data.AppSettings
 import com.ccs.radarpoc.data.repository.DroneGpsTarget
 import com.ccs.radarpoc.data.repository.DroneRepository
 import com.ccs.radarpoc.data.repository.RadarRepository
+import com.ccs.radarpoc.data.repository.TrackingState
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -59,10 +60,12 @@ class MainViewModel(
                 }
                 _uiState.update { it.copy(tracks = trackUiModels) }
                 
-                // Send GPS to drone if track is locked
+                // Send GPS to drone if track is locked and not stale
                 lockedId?.let { id ->
                     tracks.find { it.id == id }?.let { track ->
-                        sendGpsToDrone(track.id)
+                        if (!track.isStale) {
+                            sendGpsToDrone(track.id)
+                        }
                     }
                 }
             }
@@ -125,6 +128,17 @@ class MainViewModel(
                                 altitude = it.altitude
                             )
                         }
+                    )
+                }
+            }
+        }
+        
+        // Observe tracking state
+        viewModelScope.launch {
+            droneRepository.trackingState.collect { trackingState ->
+                _uiState.update { state ->
+                    state.copy(
+                        isTrackingActive = trackingState == TrackingState.TRACKING
                     )
                 }
             }
@@ -232,7 +246,7 @@ class MainViewModel(
                 state.copy(
                     tracks = updatedTracks,
                     lockedTrackId = trackId,
-                    toastMessage = "Locked Track $trackId"
+                    toastMessage = "Tracking ${track.displayTitle}"
                 )
             }
             
@@ -242,15 +256,30 @@ class MainViewModel(
     }
     
     /**
-     * Unlock the currently locked track
+     * Unlock the currently locked track and stop drone tracking
      */
     private fun unlockTrack() {
+        val wasLocked = _uiState.value.lockedTrackId != null
+        
+        // Update UI state first
         _uiState.update { state ->
             val updatedTracks = state.tracks.map { it.copy(isLocked = false) }
             state.copy(
                 tracks = updatedTracks,
                 lockedTrackId = null,
-                toastMessage = "Track unlocked"
+                toastMessage = if (wasLocked) "Track unlocked - Drone hovering" else null
+            )
+        }
+        
+        // Stop drone and hover in place
+        if (wasLocked) {
+            droneRepository.stopTrackingAndHover(
+                onSuccess = {
+                    // Drone is now hovering
+                },
+                onError = { error ->
+                    _uiState.update { it.copy(errorMessage = "Failed to stop: $error") }
+                }
             )
         }
     }
@@ -321,7 +350,8 @@ class MainViewModelFactory(
                 staleTimeoutSeconds = appSettings.staleTimeout
             )
             val droneRepository = DroneRepository(
-                missionUpdateIntervalSeconds = appSettings.missionUpdateInterval
+                missionUpdateIntervalMs = appSettings.missionUpdateInterval * 1000L,
+                minimumDistanceMeters = appSettings.minimumDistanceMeters
             )
             
             return MainViewModel(radarRepository, droneRepository, appSettings) as T
