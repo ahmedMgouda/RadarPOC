@@ -93,6 +93,7 @@ data class MainUiState(
     // Tracks
     val tracks: List<TrackUiModel> = emptyList(),
     val lockedTrackId: String? = null,
+    val lockedTrackStale: Boolean = false,  // P1: Track if locked track is stale
     val selectedTrackId: String? = null,
     
     // Drone location
@@ -147,6 +148,12 @@ data class MainUiState(
      */
     val pipContent: MainView
         get() = if (mainView == MainView.MAP) MainView.CAMERA else MainView.MAP
+    
+    /**
+     * Check if currently tracking a target (locked and not stale)
+     */
+    val isActivelyTracking: Boolean
+        get() = lockedTrackId != null && !lockedTrackStale && isTrackingActive
 }
 
 /**
