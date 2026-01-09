@@ -1,21 +1,17 @@
 package com.ccs.radarpoc
 
+import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
-import android.view.WindowManager
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.GestureDetectorCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -28,10 +24,12 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
- * Main Activity - Thin UI layer that observes ViewModel state
+ * Main Activity - Minimal UI with draggable PiP
  */
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
@@ -40,7 +38,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val DEFAULT_ZOOM = 15f
         private const val DEFAULT_LAT = 30.0444  // Cairo, Egypt
         private const val DEFAULT_LNG = 31.2357
-        private const val FULLSCREEN_UI_HIDE_DELAY = 3000L
+        private const val PIP_MARGIN = 16
     }
     
     // View Binding
@@ -56,115 +54,158 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private val trackMarkers = mutableMapOf<String, Marker>()
     
     // Camera Views
-    private var mainCameraView: AutelCodecView? = null
-    private var pipCameraView: AutelCodecView? = null
+    private var cameraView: AutelCodecView? = null
     
-    // Fullscreen UI auto-hide handler
-    private val hideHandler = Handler(Looper.getMainLooper())
-    private val hideRunnable = Runnable { hideFullscreenUI() }
+    // Bottom Sheet
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     
-    // Window insets controller for immersive mode
-    private lateinit var windowInsetsController: WindowInsetsControllerCompat
+    // PiP Gesture Detector
+    private lateinit var pipGestureDetector: GestureDetectorCompat
+    
+    // PiP Drag state
+    private var pipDragStartX = 0f
+    private var pipDragStartY = 0f
+    private var pipStartMarginX = 0
+    private var pipStartMarginY = 0
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        setupWindowInsetsController()
+        setupBottomSheet()
+        setupPipGestures()
         setupClickListeners()
-        setupFullscreenListeners()
-        setupBackPressHandler()
         setupGoogleMaps()
         setupDroneCamera()
         observeState()
         observeNavigation()
+        observeCenterOnTrack()
     }
     
     /**
-     * Setup window insets controller for immersive mode
+     * Setup bottom sheet behavior
      */
-    private fun setupWindowInsetsController() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        windowInsetsController = WindowInsetsControllerCompat(window, binding.root)
-        windowInsetsController.systemBarsBehavior = 
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    private fun setupBottomSheet() {
+        bottomSheetBehavior = BottomSheetBehavior.from(binding.trackInfoBottomSheet)
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+        
+        bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                    viewModel.onEvent(MainUiEvent.CloseTrackInfo)
+                }
+            }
+            
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                // Optional: animate something based on slide
+            }
+        })
     }
     
     /**
-     * Setup click listeners for UI elements
+     * Setup PiP gesture detection (tap, double-tap, drag)
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupPipGestures() {
+        pipGestureDetector = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                // Single tap = swap views
+                viewModel.onEvent(MainUiEvent.SwapViews)
+                return true
+            }
+            
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                // Double tap = hide PiP
+                viewModel.onEvent(MainUiEvent.HidePip)
+                return true
+            }
+        })
+        
+        binding.pipContainer.setOnTouchListener { view, event ->
+            pipGestureDetector.onTouchEvent(event)
+            
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    pipDragStartX = event.rawX
+                    pipDragStartY = event.rawY
+                    val params = view.layoutParams as ViewGroup.MarginLayoutParams
+                    pipStartMarginX = params.marginStart
+                    pipStartMarginY = params.topMargin
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - pipDragStartX
+                    val dy = event.rawY - pipDragStartY
+                    
+                    // Only drag if moved enough (to not interfere with tap)
+                    if (abs(dx) > 10 || abs(dy) > 10) {
+                        val params = view.layoutParams as ViewGroup.MarginLayoutParams
+                        params.marginStart = (pipStartMarginX + dx).toInt().coerceIn(PIP_MARGIN, binding.mainContentContainer.width - view.width - PIP_MARGIN)
+                        params.topMargin = (pipStartMarginY + dy).toInt().coerceIn(PIP_MARGIN, binding.mainContentContainer.height - view.height - PIP_MARGIN)
+                        view.layoutParams = params
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+    
+    /**
+     * Setup click listeners
      */
     private fun setupClickListeners() {
-        binding.settingsButton.setOnClickListener {
+        // Top bar collapse button
+        binding.btnCollapseTopBar.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ToggleTopBar)
+        }
+        
+        // Collapsed tab (expand top bar)
+        binding.topBarCollapsedTab.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ToggleTopBar)
+        }
+        
+        // Settings button
+        binding.btnSettings.setOnClickListener {
             viewModel.onEvent(MainUiEvent.SettingsClicked)
         }
         
-        binding.btnMapMode.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.MAP))
+        // Show PiP button
+        binding.btnShowPip.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.ShowPip)
         }
         
-        binding.btnCameraMode.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.CAMERA))
-        }
-        
-        binding.btnSplitMode.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.ViewModeChanged(ViewMode.SPLIT))
-        }
-    }
-    
-    /**
-     * Setup fullscreen-related click listeners
-     */
-    private fun setupFullscreenListeners() {
-        // Map fullscreen button
-        binding.btnMapFullscreen.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.FullscreenChanged(FullscreenTarget.MAP))
-        }
-        
-        // Camera fullscreen button
-        binding.btnCameraFullscreen.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.FullscreenChanged(FullscreenTarget.CAMERA))
-        }
-        
-        // PiP expand button
-        binding.btnExpandPip.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.FullscreenChanged(FullscreenTarget.CAMERA))
-        }
-        
-        // Exit fullscreen button
-        binding.btnExitFullscreen.setOnClickListener {
-            viewModel.onEvent(MainUiEvent.ExitFullscreen)
-        }
-        
-        // Tap on map container to show/hide UI in fullscreen
-        binding.mapContainer.setOnClickListener {
-            if (viewModel.uiState.value.isFullScreen) {
-                toggleFullscreenUI()
+        // Locked track chip
+        binding.lockedTrackChip.setOnClickListener {
+            viewModel.uiState.value.lockedTrackId?.let { trackId ->
+                viewModel.onEvent(MainUiEvent.TrackSelected(trackId))
             }
         }
         
-        // Tap on camera container to show/hide UI in fullscreen
-        binding.cameraContainer.setOnClickListener {
-            if (viewModel.uiState.value.isFullScreen) {
-                toggleFullscreenUI()
-            }
+        binding.lockedTrackChip.setOnCloseIconClickListener {
+            viewModel.onEvent(MainUiEvent.TrackUnlocked)
         }
-    }
-    
-    /**
-     * Setup back press handler for fullscreen exit
-     */
-    private fun setupBackPressHandler() {
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (viewModel.uiState.value.isFullScreen) {
-                    viewModel.onEvent(MainUiEvent.ExitFullscreen)
+        
+        // Bottom sheet buttons
+        binding.btnLockTrack.setOnClickListener {
+            viewModel.uiState.value.selectedTrackId?.let { trackId ->
+                val isLocked = viewModel.uiState.value.lockedTrackId == trackId
+                if (isLocked) {
+                    viewModel.onEvent(MainUiEvent.TrackUnlocked)
                 } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+                    viewModel.onEvent(MainUiEvent.TrackLocked(trackId))
                 }
             }
-        })
+        }
+        
+        binding.btnCloseTrackInfo.setOnClickListener {
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+        }
+        
+        binding.btnCenterOnTrack.setOnClickListener {
+            viewModel.onEvent(MainUiEvent.CenterOnSelectedTrack)
+        }
     }
     
     /**
@@ -190,15 +231,16 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         googleMap?.setOnMarkerClickListener { marker ->
             val trackId = marker.tag as? String
             if (trackId != null) {
-                showTrackContextMenu(trackId)
+                viewModel.onEvent(MainUiEvent.TrackSelected(trackId))
+                showTrackBottomSheet()
             }
             true
         }
         
-        // Tap on map to toggle fullscreen UI
+        // Tap on map to close bottom sheet
         googleMap?.setOnMapClickListener {
-            if (viewModel.uiState.value.isFullScreen) {
-                toggleFullscreenUI()
+            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_HIDDEN) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
             }
         }
     }
@@ -210,46 +252,37 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         viewModel.getDroneRepository().setCameraCallbacks(
             onReady = { codec ->
                 runOnUiThread {
-                    initializeCameraViews()
+                    initializeCameraView()
                 }
             },
             onDisconnected = {
                 runOnUiThread {
-                    cleanupCameraViews()
+                    cleanupCameraView()
                 }
             }
         )
     }
     
     /**
-     * Initialize camera views
+     * Initialize camera view
      */
-    private fun initializeCameraViews() {
-        mainCameraView = AutelCodecView(this).apply {
+    private fun initializeCameraView() {
+        cameraView = AutelCodecView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         }
-        
-        pipCameraView = AutelCodecView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        }
-        
-        updateCameraViews(viewModel.uiState.value)
+        updateViewContainers(viewModel.uiState.value)
     }
     
     /**
-     * Cleanup camera views
+     * Cleanup camera view
      */
-    private fun cleanupCameraViews() {
+    private fun cleanupCameraView() {
         binding.cameraContainer.removeAllViews()
-        binding.pipCameraContainer.removeAllViews()
-        mainCameraView = null
-        pipCameraView = null
+        binding.pipContentContainer.removeAllViews()
+        cameraView = null
     }
     
     /**
@@ -283,217 +316,149 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
+     * Observe center on track events
+     */
+    private fun observeCenterOnTrack() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.centerOnTrackEvent.collect { track ->
+                    googleMap?.animateCamera(
+                        CameraUpdateFactory.newLatLng(LatLng(track.latitude, track.longitude))
+                    )
+                }
+            }
+        }
+    }
+    
+    /**
      * Update UI based on state
      */
     private fun updateUI(state: MainUiState) {
-        updateStatusBar(state)
-        updateViewMode(state)
-        updateFullscreenMode(state)
+        updateTopBar(state)
+        updateStatusDots(state)
+        updateViewContainers(state)
+        updatePipVisibility(state)
+        updateShowPipButton(state)
+        updateLockedTrackChip(state)
         updateMapMarkers(state.tracks)
-        updateLockedTrackIndicator(state)
+        updateBottomSheet(state)
         handleToast(state.toastMessage)
         handleError(state.errorMessage)
     }
     
     /**
-     * Update status bar with connection states
+     * Update top bar visibility
      */
-    private fun updateStatusBar(state: MainUiState) {
-        binding.radarStatus.text = when (state.radarState) {
-            is ConnectionState.Connected -> getString(R.string.status_radar_connected)
-            is ConnectionState.Connecting -> getString(R.string.status_radar_connecting)
-            is ConnectionState.Disconnected -> getString(R.string.status_radar_disconnected)
-            is ConnectionState.Error -> getString(R.string.status_radar_error)
+    private fun updateTopBar(state: MainUiState) {
+        if (state.isTopBarVisible) {
+            binding.topBar.visibility = View.VISIBLE
+            binding.topBarCollapsedTab.visibility = View.GONE
+        } else {
+            binding.topBar.visibility = View.GONE
+            binding.topBarCollapsedTab.visibility = View.VISIBLE
         }
         
-        binding.droneStatus.text = when (state.droneState) {
-            is ConnectionState.Connected -> getString(R.string.status_drone_connected)
-            is ConnectionState.Connecting -> getString(R.string.status_drone_connecting)
-            is ConnectionState.Disconnected -> getString(R.string.status_drone_disconnected)
-            is ConnectionState.Error -> getString(R.string.status_drone_error)
-        }
-        
-        binding.cameraStatus.text = when (state.cameraState) {
-            is ConnectionState.Connected -> getString(R.string.status_camera_streaming)
-            is ConnectionState.Connecting -> getString(R.string.status_camera_starting)
-            is ConnectionState.Disconnected -> getString(R.string.status_camera_off)
-            is ConnectionState.Error -> getString(R.string.status_camera_error)
-        }
+        // Update track count
+        binding.trackCount.text = state.activeTracksCount.toString()
     }
     
     /**
-     * Update view mode (Map, Camera, Split)
+     * Update status indicator dots
      */
-    private fun updateViewMode(state: MainUiState) {
-        val mode = state.viewMode
-        
-        // Update button backgrounds
-        binding.btnMapMode.setBackgroundColor(
-            if (mode == ViewMode.MAP) Color.LTGRAY else Color.TRANSPARENT
-        )
-        binding.btnCameraMode.setBackgroundColor(
-            if (mode == ViewMode.CAMERA) Color.LTGRAY else Color.TRANSPARENT
-        )
-        binding.btnSplitMode.setBackgroundColor(
-            if (mode == ViewMode.SPLIT) Color.LTGRAY else Color.TRANSPARENT
+    private fun updateStatusDots(state: MainUiState) {
+        binding.radarStatusDot.setBackgroundResource(
+            when (state.radarState) {
+                is ConnectionState.Connected -> R.drawable.bg_status_dot_connected
+                is ConnectionState.Connecting -> R.drawable.bg_status_dot_connecting
+                else -> R.drawable.bg_status_dot_disconnected
+            }
         )
         
-        // Update camera views
-        updateCameraViews(state)
+        binding.droneStatusDot.setBackgroundResource(
+            when (state.droneState) {
+                is ConnectionState.Connected -> R.drawable.bg_status_dot_connected
+                is ConnectionState.Connecting -> R.drawable.bg_status_dot_connecting
+                else -> R.drawable.bg_status_dot_disconnected
+            }
+        )
+        
+        binding.cameraStatusDot.setBackgroundResource(
+            when (state.cameraState) {
+                is ConnectionState.Connected -> R.drawable.bg_status_dot_connected
+                is ConnectionState.Connecting -> R.drawable.bg_status_dot_connecting
+                else -> R.drawable.bg_status_dot_disconnected
+            }
+        )
     }
     
     /**
-     * Update camera container visibility based on view mode
+     * Update main and PiP view containers
      */
-    private fun updateCameraViews(state: MainUiState) {
-        val mode = state.viewMode
-        val fullscreenTarget = state.fullscreenTarget
-        
-        when {
-            // Fullscreen camera mode
-            fullscreenTarget == FullscreenTarget.CAMERA -> {
+    private fun updateViewContainers(state: MainUiState) {
+        when (state.mainView) {
+            MainView.MAP -> {
+                // Map is main view
+                binding.mapContainer.visibility = View.VISIBLE
+                binding.cameraContainer.visibility = View.GONE
+                
+                // Camera goes to PiP
+                binding.pipContentContainer.removeAllViews()
+                cameraView?.let { 
+                    (it.parent as? ViewGroup)?.removeView(it)
+                    binding.pipContentContainer.addView(it)
+                }
+            }
+            MainView.CAMERA -> {
+                // Camera is main view
                 binding.mapContainer.visibility = View.GONE
                 binding.cameraContainer.removeAllViews()
-                mainCameraView?.let { binding.cameraContainer.addView(it) }
+                cameraView?.let {
+                    (it.parent as? ViewGroup)?.removeView(it)
+                    binding.cameraContainer.addView(it)
+                }
                 binding.cameraContainer.visibility = View.VISIBLE
-                binding.pipCameraContainer.visibility = View.GONE
-            }
-            // Fullscreen map mode
-            fullscreenTarget == FullscreenTarget.MAP -> {
-                binding.mapContainer.visibility = View.VISIBLE
-                binding.cameraContainer.visibility = View.GONE
-                binding.pipCameraContainer.visibility = View.GONE
-            }
-            // Normal MAP mode
-            mode == ViewMode.MAP -> {
-                binding.mapContainer.visibility = View.VISIBLE
-                binding.cameraContainer.removeAllViews()
-                binding.cameraContainer.visibility = View.GONE
-                binding.pipCameraContainer.visibility = View.GONE
-            }
-            // Normal CAMERA mode
-            mode == ViewMode.CAMERA -> {
-                binding.mapContainer.visibility = View.GONE
-                binding.pipCameraContainer.removeAllViews()
-                binding.pipCameraContainer.visibility = View.GONE
-                binding.cameraContainer.removeAllViews()
-                mainCameraView?.let { binding.cameraContainer.addView(it) }
-                binding.cameraContainer.visibility = View.VISIBLE
-            }
-            // SPLIT mode
-            mode == ViewMode.SPLIT -> {
-                binding.mapContainer.visibility = View.VISIBLE
-                binding.cameraContainer.removeAllViews()
-                binding.cameraContainer.visibility = View.GONE
-                binding.pipCameraContainer.removeAllViews()
-                pipCameraView?.let { binding.pipCameraContainer.addView(it) }
-                binding.pipCameraContainer.visibility = View.VISIBLE
+                
+                // Map is always visible (behind), PiP shows mini map
+                // For simplicity, we don't have mini-map in PiP, just hide PiP when camera is main
+                binding.pipContentContainer.removeAllViews()
             }
         }
-        
-        // Update fullscreen button visibility
-        binding.btnMapFullscreen.visibility = 
-            if (mode == ViewMode.MAP && !state.isFullScreen) View.VISIBLE else View.GONE
-        binding.btnCameraFullscreen.visibility = 
-            if (mode == ViewMode.CAMERA && !state.isFullScreen) View.VISIBLE else View.GONE
     }
     
     /**
-     * Update fullscreen mode UI
+     * Update PiP container visibility
      */
-    private fun updateFullscreenMode(state: MainUiState) {
-        if (state.isFullScreen) {
-            enterFullscreen()
+    private fun updatePipVisibility(state: MainUiState) {
+        val shouldShowPip = state.isPipVisible && 
+            state.isCameraAvailable && 
+            state.mainView == MainView.MAP
+        
+        binding.pipContainer.visibility = if (shouldShowPip) View.VISIBLE else View.GONE
+    }
+    
+    /**
+     * Update show PiP button visibility
+     */
+    private fun updateShowPipButton(state: MainUiState) {
+        val shouldShowButton = !state.isPipVisible && 
+            state.isCameraAvailable && 
+            state.mainView == MainView.MAP
+        
+        binding.btnShowPip.visibility = if (shouldShowButton) View.VISIBLE else View.GONE
+        binding.btnShowPip.setIconResource(R.drawable.ic_camera)
+    }
+    
+    /**
+     * Update locked track chip
+     */
+    private fun updateLockedTrackChip(state: MainUiState) {
+        val lockedTrack = state.lockedTrack
+        if (lockedTrack != null) {
+            binding.lockedTrackChip.text = "Track ${lockedTrack.id}"
+            binding.lockedTrackChip.visibility = View.VISIBLE
         } else {
-            exitFullscreen()
+            binding.lockedTrackChip.visibility = View.GONE
         }
-    }
-    
-    /**
-     * Enter fullscreen mode
-     */
-    private fun enterFullscreen() {
-        // Hide status bar and bottom toolbar
-        binding.statusBar.visibility = View.GONE
-        binding.bottomToolbar.visibility = View.GONE
-        
-        // Show exit fullscreen button
-        binding.btnExitFullscreen.visibility = View.VISIBLE
-        
-        // Enter immersive mode
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
-        
-        // Keep screen on
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        
-        // Schedule UI hide
-        scheduleFullscreenUIHide()
-    }
-    
-    /**
-     * Exit fullscreen mode
-     */
-    private fun exitFullscreen() {
-        // Show status bar and bottom toolbar
-        binding.statusBar.visibility = View.VISIBLE
-        binding.bottomToolbar.visibility = View.VISIBLE
-        
-        // Hide exit fullscreen button
-        binding.btnExitFullscreen.visibility = View.GONE
-        
-        // Exit immersive mode
-        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
-        
-        // Allow screen to turn off
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        
-        // Cancel any pending hide
-        hideHandler.removeCallbacks(hideRunnable)
-    }
-    
-    /**
-     * Toggle fullscreen UI visibility
-     */
-    private fun toggleFullscreenUI() {
-        if (binding.btnExitFullscreen.visibility == View.VISIBLE) {
-            hideFullscreenUI()
-        } else {
-            showFullscreenUI()
-        }
-    }
-    
-    /**
-     * Show fullscreen UI controls
-     */
-    private fun showFullscreenUI() {
-        binding.btnExitFullscreen.visibility = View.VISIBLE
-        binding.btnExitFullscreen.animate()
-            .alpha(1f)
-            .setDuration(200)
-            .start()
-        
-        scheduleFullscreenUIHide()
-    }
-    
-    /**
-     * Hide fullscreen UI controls
-     */
-    private fun hideFullscreenUI() {
-        binding.btnExitFullscreen.animate()
-            .alpha(0f)
-            .setDuration(200)
-            .withEndAction {
-                binding.btnExitFullscreen.visibility = View.INVISIBLE
-            }
-            .start()
-    }
-    
-    /**
-     * Schedule hiding fullscreen UI after delay
-     */
-    private fun scheduleFullscreenUIHide() {
-        hideHandler.removeCallbacks(hideRunnable)
-        hideHandler.postDelayed(hideRunnable, FULLSCREEN_UI_HIDE_DELAY)
     }
     
     /**
@@ -521,12 +486,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 
                 val marker = trackMarkers[trackUi.id]
                 if (marker != null) {
-                    // Update existing marker
                     marker.position = position
                     marker.setIcon(BitmapDescriptorFactory.defaultMarker(markerColor))
                     marker.title = trackUi.displayTitle
                 } else {
-                    // Create new marker
                     val newMarker = map.addMarker(
                         MarkerOptions()
                             .position(position)
@@ -543,84 +506,41 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
-     * Update locked track indicator
+     * Update bottom sheet content
      */
-    private fun updateLockedTrackIndicator(state: MainUiState) {
-        val lockedTrack = state.lockedTrack
-        val isInCameraMode = state.viewMode == ViewMode.CAMERA || 
-            state.fullscreenTarget == FullscreenTarget.CAMERA
+    private fun updateBottomSheet(state: MainUiState) {
+        val selectedTrack = state.selectedTrack
         
-        if (lockedTrack != null && isInCameraMode) {
-            binding.lockedTrackIndicator.text = getString(R.string.track_locked, lockedTrack.id)
-            binding.lockedTrackIndicator.visibility = View.VISIBLE
-        } else {
-            binding.lockedTrackIndicator.visibility = View.GONE
+        if (selectedTrack != null) {
+            val track = selectedTrack.track
+            val isLocked = state.lockedTrackId == selectedTrack.id
+            
+            // Update title
+            binding.trackInfoTitle.text = "Track ${selectedTrack.id}"
+            
+            // Update quick info
+            binding.trackInfoQuick.text = selectedTrack.quickInfo
+            
+            // Update lock button icon
+            binding.btnLockTrack.setImageResource(
+                if (isLocked) R.drawable.ic_lock else R.drawable.ic_lock_open
+            )
+            
+            // Update expanded content
+            binding.trackInfoPosition.text = "${String.format("%.6f", track.geolocation.latitude)}°, ${String.format("%.6f", track.geolocation.longitude)}°"
+            binding.trackInfoMovement.text = "Alt: ${String.format("%.0f", track.geolocation.altitude)}m  Speed: ${String.format("%.1f", track.geolocation.speed)}m/s  Heading: ${String.format("%.0f", track.geolocation.heading)}°"
+            binding.trackInfoRadar.text = "Range: ${String.format("%.2f", track.observation.range)}m  Azimuth: ${String.format("%.1f", track.observation.azimuthAngle)}°"
+            
+            val topClassification = track.stats.classifications.maxByOrNull { it.confidence }
+            binding.trackInfoClassification.text = "${topClassification?.type ?: "Unknown"} (${String.format("%.0f", (topClassification?.confidence ?: 0.0) * 100)}%)"
         }
     }
     
     /**
-     * Show track context menu
+     * Show track bottom sheet
      */
-    private fun showTrackContextMenu(trackId: String) {
-        val trackUi = viewModel.getTrackById(trackId) ?: return
-        
-        val options = if (trackUi.isLocked) {
-            arrayOf(getString(R.string.track_info), getString(R.string.track_unlock))
-        } else {
-            arrayOf(getString(R.string.track_info), getString(R.string.track_lock))
-        }
-        
-        AlertDialog.Builder(this)
-            .setTitle("Track ${trackUi.id}")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showTrackInfo(trackUi)
-                    1 -> {
-                        if (trackUi.isLocked) {
-                            viewModel.onEvent(MainUiEvent.TrackUnlocked)
-                        } else {
-                            viewModel.onEvent(MainUiEvent.TrackLocked(trackId))
-                        }
-                    }
-                }
-            }
-            .show()
-    }
-    
-    /**
-     * Show track information dialog
-     */
-    private fun showTrackInfo(trackUi: TrackUiModel) {
-        val track = trackUi.track
-        val topClassification = track.stats.classifications.maxByOrNull { it.confidence }
-        
-        val info = """
-            Track ID: ${track.id}
-            
-            Position:
-            Lat: ${String.format("%.6f", track.geolocation.latitude)}
-            Lon: ${String.format("%.6f", track.geolocation.longitude)}
-            Alt: ${String.format("%.2f", track.geolocation.altitude)} m
-            
-            Movement:
-            Speed: ${String.format("%.2f", track.geolocation.speed)} m/s
-            Heading: ${String.format("%.1f", track.geolocation.heading)}°
-            
-            Radar Data:
-            Range: ${String.format("%.2f", track.observation.range)} m
-            Azimuth: ${String.format("%.1f", track.observation.azimuthAngle)}°
-            
-            Classification:
-            ${topClassification?.type ?: "Unknown"} (${String.format("%.1f", (topClassification?.confidence ?: 0.0) * 100)}%)
-            
-            Status: ${if (trackUi.isStale) getString(R.string.track_info_status_stale) else getString(R.string.track_info_status_active)}
-        """.trimIndent()
-        
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.track_info_title, track.id))
-            .setMessage(info)
-            .setPositiveButton(getString(R.string.dialog_ok), null)
-            .show()
+    private fun showTrackBottomSheet() {
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
     }
     
     /**
@@ -650,12 +570,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onPause() {
         super.onPause()
         viewModel.stopRadarPolling()
-        hideHandler.removeCallbacks(hideRunnable)
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        cleanupCameraViews()
-        hideHandler.removeCallbacks(hideRunnable)
+        cleanupCameraView()
     }
 }
