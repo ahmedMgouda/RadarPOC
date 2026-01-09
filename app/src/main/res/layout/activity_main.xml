@@ -131,6 +131,17 @@
                 android:textStyle="bold"
                 tools:text="5" />
 
+            <!-- Battery Indicator -->
+            <TextView
+                android:id="@+id/batteryIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                tools:text="🔋 85%" />
+
         </LinearLayout>
 
         <!-- Settings Button -->
