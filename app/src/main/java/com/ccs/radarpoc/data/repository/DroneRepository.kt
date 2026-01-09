@@ -61,10 +61,9 @@ enum class TrackingState {
  * Handles connection, camera feed, and GPS commands
  */
 class DroneRepository(
-    missionUpdateIntervalSeconds: Int = 3  // Minimum time between mission updates
+    private val missionUpdateIntervalMs: Long = 3000L,      // Minimum time between mission updates
+    private val minimumDistanceMeters: Double = 5.0         // Minimum distance change to trigger update
 ) {
-    private val missionUpdateIntervalMs = missionUpdateIntervalSeconds * 1000L
-    private val minimumDistanceMeters = 5.0  // Minimum distance change to trigger update
     companion object {
         private const val TAG = "DroneRepository"
         private const val DEFAULT_DRONE_SPEED = 5.0f
@@ -245,7 +244,7 @@ class DroneRepository(
     
     /**
      * Stop tracking and hover in place
-     * Call this when user unlocks a track
+     * Call this when user unlocks a track or target is lost
      */
     fun stopTrackingAndHover(
         onSuccess: () -> Unit = {},
