@@ -176,14 +176,16 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             viewModel.onEvent(MainUiEvent.ShowPip)
         }
         
-        // Locked track chip
+        // Locked track chip - tap to show info
         binding.lockedTrackChip.setOnClickListener {
             viewModel.uiState.value.lockedTrackId?.let { trackId ->
                 viewModel.onEvent(MainUiEvent.TrackSelected(trackId))
+                showTrackBottomSheet()
             }
         }
         
-        binding.lockedTrackChip.setOnCloseIconClickListener {
+        // Unlock button on chip
+        binding.btnUnlockTrack.setOnClickListener {
             viewModel.onEvent(MainUiEvent.TrackUnlocked)
         }
         
@@ -445,7 +447,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             state.mainView == MainView.MAP
         
         binding.btnShowPip.visibility = if (shouldShowButton) View.VISIBLE else View.GONE
-        binding.btnShowPip.setIconResource(R.drawable.ic_camera)
     }
     
     /**
@@ -454,7 +455,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun updateLockedTrackChip(state: MainUiState) {
         val lockedTrack = state.lockedTrack
         if (lockedTrack != null) {
-            binding.lockedTrackChip.text = "Track ${lockedTrack.id}"
+            binding.lockedTrackText.text = "Track ${lockedTrack.id}"
             binding.lockedTrackChip.visibility = View.VISIBLE
         } else {
             binding.lockedTrackChip.visibility = View.GONE
