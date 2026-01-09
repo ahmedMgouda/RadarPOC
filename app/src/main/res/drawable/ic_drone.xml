@@ -3,46 +3,31 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Quadcopter drone icon -->
+    <!-- Simple quadcopter drone icon -->
     <!-- Top-left rotor -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M4,4m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+        android:pathData="M5,5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
     <!-- Top-right rotor -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M20,4m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+        android:pathData="M19,5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
     <!-- Bottom-left rotor -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M4,20m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+        android:pathData="M5,19m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
     <!-- Bottom-right rotor -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M20,20m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
-    <!-- Arms -->
+        android:pathData="M19,19m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
+    <!-- Diagonal arms -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M6,6L10,10"
-        android:strokeWidth="1.5"
-        android:strokeColor="@android:color/white"/>
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M18,6L14,10"
-        android:strokeWidth="1.5"
-        android:strokeColor="@android:color/white"/>
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M6,18L10,14"
-        android:strokeWidth="1.5"
-        android:strokeColor="@android:color/white"/>
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M18,18L14,14"
-        android:strokeWidth="1.5"
+        android:pathData="M7,7L17,17M17,7L7,17"
+        android:strokeWidth="2"
         android:strokeColor="@android:color/white"/>
     <!-- Center body -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,12m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"/>
+        android:pathData="M12,12m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
 </vector>

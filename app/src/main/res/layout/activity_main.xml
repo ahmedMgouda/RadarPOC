@@ -102,36 +102,34 @@
                 android:gravity="center_vertical"
                 android:paddingHorizontal="8dp">
 
-                <!-- Radar Status Icon -->
+                <!-- Radar Status Icon (smaller) -->
                 <ImageView
                     android:id="@+id/radarStatusIcon"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:src="@drawable/ic_radar"
                     android:alpha="0.4"
                     android:contentDescription="@string/status_radar_disconnected" />
 
-                <!-- Drone Status Icon -->
+                <!-- Drone Status Icon (smaller) -->
                 <ImageView
                     android:id="@+id/droneStatusIcon"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_marginStart="12dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_marginStart="10dp"
                     android:src="@drawable/ic_drone"
                     android:alpha="0.4"
                     android:contentDescription="@string/status_drone_disconnected" />
 
-                <!-- Separator -->
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="20dp"
-                    android:layout_marginHorizontal="16dp"
-                    android:background="#44FFFFFF" />
+                <!-- Space instead of separator -->
+                <Space
+                    android:layout_width="24dp"
+                    android:layout_height="1dp" />
 
                 <!-- Track Count with Icon -->
                 <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
                     android:src="@drawable/ic_track"
                     app:tint="@android:color/white" />
 
@@ -141,7 +139,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
                     android:textColor="@android:color/white"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     tools:text="5" />
 
