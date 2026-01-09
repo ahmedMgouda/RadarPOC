@@ -1,6 +1,11 @@
 package com.ccs.radarpoc.ui.main
 
 import com.ccs.radarpoc.data.RadarTrack
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Represents which view is currently the main (full screen) view
@@ -53,11 +58,11 @@ data class TrackUiModel(
         val dLat = Math.toRadians(latitude - lat)
         val dLon = Math.toRadians(longitude - lon)
         
-        val a = kotlin.math.sin(dLat / 2).pow(2.0) +
-                kotlin.math.cos(Math.toRadians(lat)) * kotlin.math.cos(Math.toRadians(latitude)) *
-                kotlin.math.sin(dLon / 2).pow(2.0)
+        val a = sin(dLat / 2).pow(2.0) +
+                cos(Math.toRadians(lat)) * cos(Math.toRadians(latitude)) *
+                sin(dLon / 2).pow(2.0)
         
-        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return R * c
     }
 }
@@ -92,6 +97,9 @@ data class MainUiState(
     
     // Drone location
     val droneLocation: DroneLocationUi? = null,
+    
+    // Tracking state
+    val isTrackingActive: Boolean = false,
     
     // UI feedback
     val isLoading: Boolean = false,
