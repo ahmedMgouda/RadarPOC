@@ -320,7 +320,9 @@ class MainViewModelFactory(
                 pollIntervalSeconds = appSettings.pollInterval,
                 staleTimeoutSeconds = appSettings.staleTimeout
             )
-            val droneRepository = DroneRepository()
+            val droneRepository = DroneRepository(
+                missionUpdateIntervalSeconds = appSettings.missionUpdateInterval
+            )
             
             return MainViewModel(radarRepository, droneRepository, appSettings) as T
         }

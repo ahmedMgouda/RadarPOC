@@ -65,6 +65,30 @@
             android:layout_height="wrap_content"
             android:hint="5"
             android:inputType="number"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Mission Update Interval -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Mission Update Interval (seconds)"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="How often to send new GPS commands to drone when tracking"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:layout_marginTop="4dp" />
+
+        <EditText
+            android:id="@+id/etMissionUpdateInterval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="3"
+            android:inputType="number"
             android:layout_marginBottom="24dp" />
 
         <!-- Buttons -->

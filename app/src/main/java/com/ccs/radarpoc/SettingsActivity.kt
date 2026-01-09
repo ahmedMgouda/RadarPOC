@@ -18,6 +18,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etRadarBaseUrl: EditText
     private lateinit var etPollInterval: EditText
     private lateinit var etStaleTimeout: EditText
+    private lateinit var etMissionUpdateInterval: EditText
     private lateinit var btnTestConnection: Button
     private lateinit var btnSave: Button
     private lateinit var tvTestResult: TextView
@@ -43,6 +44,7 @@ class SettingsActivity : AppCompatActivity() {
         etRadarBaseUrl = findViewById(R.id.etRadarBaseUrl)
         etPollInterval = findViewById(R.id.etPollInterval)
         etStaleTimeout = findViewById(R.id.etStaleTimeout)
+        etMissionUpdateInterval = findViewById(R.id.etMissionUpdateInterval)
         btnTestConnection = findViewById(R.id.btnTestConnection)
         btnSave = findViewById(R.id.btnSave)
         tvTestResult = findViewById(R.id.tvTestResult)
@@ -52,6 +54,7 @@ class SettingsActivity : AppCompatActivity() {
         etRadarBaseUrl.setText(appSettings.radarBaseUrl)
         etPollInterval.setText(appSettings.pollInterval.toString())
         etStaleTimeout.setText(appSettings.staleTimeout.toString())
+        etMissionUpdateInterval.setText(appSettings.missionUpdateInterval.toString())
     }
     
     private fun setupListeners() {
@@ -68,6 +71,7 @@ class SettingsActivity : AppCompatActivity() {
         val baseUrl = etRadarBaseUrl.text.toString().trim()
         val pollInterval = etPollInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_POLL_INTERVAL
         val staleTimeout = etStaleTimeout.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_STALE_TIMEOUT
+        val missionUpdateInterval = etMissionUpdateInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_MISSION_UPDATE_INTERVAL
         
         if (baseUrl.isEmpty()) {
             Toast.makeText(this, "Please enter a valid radar base URL", Toast.LENGTH_SHORT).show()
@@ -84,9 +88,15 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         
+        if (missionUpdateInterval < 1) {
+            Toast.makeText(this, "Mission update interval must be at least 1 second", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         appSettings.radarBaseUrl = baseUrl
         appSettings.pollInterval = pollInterval
         appSettings.staleTimeout = staleTimeout
+        appSettings.missionUpdateInterval = missionUpdateInterval
         
         Toast.makeText(this, "Settings saved successfully", Toast.LENGTH_SHORT).show()
         finish()

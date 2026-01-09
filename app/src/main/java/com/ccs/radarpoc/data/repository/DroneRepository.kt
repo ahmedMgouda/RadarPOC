@@ -47,12 +47,19 @@ sealed class DroneOperationResult {
  * Repository for drone operations
  * Handles connection, camera feed, and GPS commands
  */
-class DroneRepository {
+class DroneRepository(
+    private val missionUpdateIntervalSeconds: Int = 3
+) {
     companion object {
         private const val TAG = "DroneRepository"
         private const val DEFAULT_DRONE_SPEED = 5.0f
         private const val DEFAULT_HOVER_TIME = 5
     }
+    
+    // Mission tracking for optimization
+    private var currentMissionId: String? = null
+    private var lastMissionUpdateTime = 0L
+    private var lastSentTarget: DroneGpsTarget? = null
     
     // Connection state
     private val _isConnected = MutableStateFlow(false)
@@ -136,6 +143,7 @@ class DroneRepository {
     
     /**
      * Send GPS coordinates to drone for tracking
+     * Optimized with rate limiting and mission cancellation
      */
     fun sendGpsTarget(
         target: DroneGpsTarget,
@@ -144,6 +152,28 @@ class DroneRepository {
     ): DroneOperationResult {
         if (!_isConnected.value || autelProduct == null) {
             return DroneOperationResult.NotConnected
+        }
+        
+        // Rate limiting: Check if enough time has passed since last update
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastUpdate = currentTime - lastMissionUpdateTime
+        val minUpdateIntervalMs = missionUpdateIntervalSeconds * 1000L
+        
+        if (timeSinceLastUpdate < minUpdateIntervalMs && lastSentTarget != null) {
+            Log.d(TAG, "Rate limit: Skipping mission update (${timeSinceLastUpdate}ms < ${minUpdateIntervalMs}ms)")
+            return DroneOperationResult.Success // Silent skip
+        }
+        
+        // Check if target location changed significantly (optional optimization)
+        lastSentTarget?.let { last ->
+            val distance = calculateDistance(
+                last.latitude, last.longitude,
+                target.latitude, target.longitude
+            )
+            if (distance < 5.0) { // Less than 5 meters movement
+                Log.d(TAG, "Target barely moved (${distance}m), skipping update")
+                return DroneOperationResult.Success
+            }
         }
         
         try {
@@ -155,38 +185,28 @@ class DroneRepository {
                 return DroneOperationResult.Error(error)
             }
             
-            // Create mission
-            val mission = createWaypointMission(target)
-            
-            // Prepare and start mission
-            missionManager.prepareMission(mission, object : CallbackWithOneParamProgress<Boolean> {
-                override fun onProgress(progress: Float) {
-                    Log.d(TAG, "Mission preparation progress: $progress")
-                }
-                
-                override fun onSuccess(result: Boolean?) {
-                    Log.d(TAG, "Mission prepared successfully, starting mission")
+            // Cancel any existing mission before starting new one
+            if (currentMissionId != null) {
+                Log.d(TAG, "Canceling previous mission: $currentMissionId")
+                missionManager.cancelMission(object : CallbackWithNoParam {
+                    override fun onSuccess() {
+                        Log.d(TAG, "Previous mission canceled successfully")
+                        startNewMission(target, missionManager, onSuccess, onError)
+                    }
                     
-                    missionManager.startMission(object : CallbackWithNoParam {
-                        override fun onSuccess() {
-                            Log.d(TAG, "GPS waypoint mission started: ${target.latitude}, ${target.longitude}, alt: ${target.altitude}")
-                            onSuccess()
-                        }
-                        
-                        override fun onFailure(error: AutelError?) {
-                            val errorMsg = "Failed to start mission: ${error?.description}"
-                            Log.e(TAG, errorMsg)
-                            onError(errorMsg)
-                        }
-                    })
-                }
-                
-                override fun onFailure(error: AutelError?) {
-                    val errorMsg = "Failed to prepare mission: ${error?.description}"
-                    Log.e(TAG, errorMsg)
-                    onError(errorMsg)
-                }
-            })
+                    override fun onFailure(error: AutelError?) {
+                        Log.w(TAG, "Failed to cancel previous mission: ${error?.description}, starting new mission anyway")
+                        startNewMission(target, missionManager, onSuccess, onError)
+                    }
+                })
+            } else {
+                // No previous mission, start directly
+                startNewMission(target, missionManager, onSuccess, onError)
+            }
+            
+            // Update tracking variables
+            lastMissionUpdateTime = currentTime
+            lastSentTarget = target
             
             return DroneOperationResult.Success
             
@@ -196,6 +216,68 @@ class DroneRepository {
             onError(errorMsg)
             return DroneOperationResult.Error(errorMsg)
         }
+    }
+    
+    /**
+     * Start a new waypoint mission
+     */
+    private fun startNewMission(
+        target: DroneGpsTarget,
+        missionManager: com.autel.sdk.mission.MissionManager,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val mission = createWaypointMission(target)
+        currentMissionId = mission.GUID
+        
+        Log.d(TAG, "Preparing new mission: $currentMissionId for track ${target.trackId}")
+        
+        missionManager.prepareMission(mission, object : CallbackWithOneParamProgress<Boolean> {
+            override fun onProgress(progress: Float) {
+                Log.d(TAG, "Mission preparation progress: $progress")
+            }
+            
+            override fun onSuccess(result: Boolean?) {
+                Log.d(TAG, "Mission prepared successfully, starting mission")
+                
+                missionManager.startMission(object : CallbackWithNoParam {
+                    override fun onSuccess() {
+                        Log.d(TAG, "GPS waypoint mission started: ${target.latitude}, ${target.longitude}, alt: ${target.altitude}")
+                        onSuccess()
+                    }
+                    
+                    override fun onFailure(error: AutelError?) {
+                        val errorMsg = "Failed to start mission: ${error?.description}"
+                        Log.e(TAG, errorMsg)
+                        currentMissionId = null // Clear failed mission
+                        onError(errorMsg)
+                    }
+                })
+            }
+            
+            override fun onFailure(error: AutelError?) {
+                val errorMsg = "Failed to prepare mission: ${error?.description}"
+                Log.e(TAG, errorMsg)
+                currentMissionId = null // Clear failed mission
+                onError(errorMsg)
+            }
+        })
+    }
+    
+    /**
+     * Calculate distance between two GPS coordinates (simple approximation)
+     */
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val R = 6371000.0 // Earth radius in meters
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        
+        val a = kotlin.math.sin(dLat / 2).pow(2.0) +
+                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                kotlin.math.sin(dLon / 2).pow(2.0)
+        
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return R * c
     }
     
     /**
