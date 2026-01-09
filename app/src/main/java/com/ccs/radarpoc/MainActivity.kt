@@ -39,6 +39,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val DEFAULT_LAT = 30.0444  // Cairo, Egypt
         private const val DEFAULT_LNG = 31.2357
         private const val PIP_MARGIN = 16
+        
+        // Alpha values for status icons
+        private const val ALPHA_CONNECTED = 1.0f
+        private const val ALPHA_DISCONNECTED = 0.4f
     }
     
     // View Binding
@@ -337,7 +341,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun updateUI(state: MainUiState) {
         updateTopBar(state)
-        updateStatusDots(state)
+        updateStatusIcons(state)
         updateViewContainers(state)
         updatePipVisibility(state)
         updateShowPipButton(state)
@@ -365,31 +369,28 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
-     * Update status indicator dots
+     * Update status icons (radar and drone) based on connection state
+     * Connected = full opacity (1.0), Disconnected = dimmed (0.4)
      */
-    private fun updateStatusDots(state: MainUiState) {
-        binding.radarStatusDot.setBackgroundResource(
-            when (state.radarState) {
-                is ConnectionState.Connected -> R.drawable.bg_status_dot_connected
-                is ConnectionState.Connecting -> R.drawable.bg_status_dot_connecting
-                else -> R.drawable.bg_status_dot_disconnected
-            }
+    private fun updateStatusIcons(state: MainUiState) {
+        // Radar status icon
+        binding.radarStatusIcon.alpha = when (state.radarState) {
+            is ConnectionState.Connected -> ALPHA_CONNECTED
+            else -> ALPHA_DISCONNECTED
+        }
+        binding.radarStatusIcon.contentDescription = getString(
+            if (state.radarState.isConnected) R.string.status_radar_connected 
+            else R.string.status_radar_disconnected
         )
         
-        binding.droneStatusDot.setBackgroundResource(
-            when (state.droneState) {
-                is ConnectionState.Connected -> R.drawable.bg_status_dot_connected
-                is ConnectionState.Connecting -> R.drawable.bg_status_dot_connecting
-                else -> R.drawable.bg_status_dot_disconnected
-            }
-        )
-        
-        binding.cameraStatusDot.setBackgroundResource(
-            when (state.cameraState) {
-                is ConnectionState.Connected -> R.drawable.bg_status_dot_connected
-                is ConnectionState.Connecting -> R.drawable.bg_status_dot_connecting
-                else -> R.drawable.bg_status_dot_disconnected
-            }
+        // Drone status icon
+        binding.droneStatusIcon.alpha = when (state.droneState) {
+            is ConnectionState.Connected -> ALPHA_CONNECTED
+            else -> ALPHA_DISCONNECTED
+        }
+        binding.droneStatusIcon.contentDescription = getString(
+            if (state.droneState.isConnected) R.string.status_drone_connected 
+            else R.string.status_drone_disconnected
         )
     }
     
@@ -440,14 +441,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
     /**
      * Update show PiP FAB visibility
+     * Show when drone is connected (even if camera not streaming yet)
      */
     private fun updateShowPipButton(state: MainUiState) {
-        val shouldShowButton = !state.isPipVisible && 
-            state.isCameraAvailable && 
+        val shouldShowButton = state.isDroneConnected && 
+            !state.isPipVisible && 
             state.mainView == MainView.MAP
         
         if (shouldShowButton) {
             binding.btnShowPip.show()
+            // Dim the FAB if camera not actually available yet
+            binding.btnShowPip.alpha = if (state.isCameraAvailable) 1.0f else 0.6f
         } else {
             binding.btnShowPip.hide()
         }
