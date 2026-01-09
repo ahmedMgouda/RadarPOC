@@ -3,19 +3,9 @@ package com.ccs.radarpoc.ui.main
 import com.ccs.radarpoc.data.RadarTrack
 
 /**
- * Represents the different view modes available in the main screen
+ * Represents which view is currently the main (full screen) view
  */
-enum class ViewMode {
-    MAP,
-    CAMERA,
-    SPLIT
-}
-
-/**
- * Represents which view is currently in fullscreen
- */
-enum class FullscreenTarget {
-    NONE,
+enum class MainView {
     MAP,
     CAMERA
 }
@@ -47,10 +37,12 @@ data class TrackUiModel(
     val speed: Double get() = track.geolocation.speed
     val heading: Double get() = track.geolocation.heading
     
-    val displayTitle: String get() = buildString {
-        append("Track ${track.id}")
-        if (isLocked) append(" [LOCKED]")
-        if (isStale) append(" (Stale)")
+    val displayTitle: String get() = "Track ${track.id}"
+    
+    val quickInfo: String get() = buildString {
+        append("📍 ${String.format("%.2f", latitude)}°, ${String.format("%.2f", longitude)}°")
+        append("  📏 ${String.format("%.0f", altitude)}m")
+        append("  💨 ${String.format("%.1f", speed)}m/s")
     }
 }
 
@@ -58,9 +50,10 @@ data class TrackUiModel(
  * Main UI State - Single source of truth for the main screen
  */
 data class MainUiState(
-    // View mode
-    val viewMode: ViewMode = ViewMode.MAP,
-    val fullscreenTarget: FullscreenTarget = FullscreenTarget.NONE,
+    // View state
+    val mainView: MainView = MainView.MAP,
+    val isPipVisible: Boolean = false,
+    val isTopBarVisible: Boolean = true,
     
     // Connection states
     val radarState: ConnectionState = ConnectionState.Disconnected,
@@ -70,6 +63,7 @@ data class MainUiState(
     // Tracks
     val tracks: List<TrackUiModel> = emptyList(),
     val lockedTrackId: String? = null,
+    val selectedTrackId: String? = null,
     
     // UI feedback
     val isLoading: Boolean = false,
@@ -77,16 +71,16 @@ data class MainUiState(
     val toastMessage: String? = null
 ) {
     /**
-     * Check if in fullscreen mode
-     */
-    val isFullScreen: Boolean
-        get() = fullscreenTarget != FullscreenTarget.NONE
-    
-    /**
      * Get the currently locked track
      */
     val lockedTrack: TrackUiModel?
         get() = tracks.find { it.id == lockedTrackId }
+    
+    /**
+     * Get the currently selected track (for bottom sheet)
+     */
+    val selectedTrack: TrackUiModel?
+        get() = tracks.find { it.id == selectedTrackId }
     
     /**
      * Check if radar is connected
@@ -101,9 +95,9 @@ data class MainUiState(
         get() = droneState.isConnected
     
     /**
-     * Check if camera is streaming
+     * Check if camera is available (drone connected and streaming)
      */
-    val isCameraStreaming: Boolean
+    val isCameraAvailable: Boolean
         get() = cameraState.isConnected
     
     /**
@@ -111,18 +105,32 @@ data class MainUiState(
      */
     val activeTracksCount: Int
         get() = tracks.count { !it.isStale }
+    
+    /**
+     * What should PiP show (opposite of main view)
+     */
+    val pipContent: MainView
+        get() = if (mainView == MainView.MAP) MainView.CAMERA else MainView.MAP
 }
 
 /**
  * Events that can be triggered from the UI
  */
 sealed class MainUiEvent {
-    data class ViewModeChanged(val mode: ViewMode) : MainUiEvent()
-    data class FullscreenChanged(val target: FullscreenTarget) : MainUiEvent()
-    object ExitFullscreen : MainUiEvent()
+    // View events
+    object SwapViews : MainUiEvent()
+    object HidePip : MainUiEvent()
+    object ShowPip : MainUiEvent()
+    object ToggleTopBar : MainUiEvent()
+    
+    // Track events
     data class TrackSelected(val trackId: String) : MainUiEvent()
     data class TrackLocked(val trackId: String) : MainUiEvent()
     object TrackUnlocked : MainUiEvent()
+    object CloseTrackInfo : MainUiEvent()
+    object CenterOnSelectedTrack : MainUiEvent()
+    
+    // Other events
     object SettingsClicked : MainUiEvent()
     object ToastShown : MainUiEvent()
     object ErrorDismissed : MainUiEvent()
