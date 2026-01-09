@@ -32,6 +32,10 @@ class MainViewModel(
     private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
     val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
     
+    // Center on track event (for map)
+    private val _centerOnTrackEvent = MutableSharedFlow<TrackUiModel>()
+    val centerOnTrackEvent: SharedFlow<TrackUiModel> = _centerOnTrackEvent.asSharedFlow()
+    
     init {
         observeRadarData()
         observeDroneState()
@@ -99,9 +103,11 @@ class MainViewModel(
         
         viewModelScope.launch {
             droneRepository.isCameraStreaming.collect { isStreaming ->
-                _uiState.update {
-                    it.copy(
-                        cameraState = if (isStreaming) ConnectionState.Connected else ConnectionState.Disconnected
+                _uiState.update { state ->
+                    state.copy(
+                        cameraState = if (isStreaming) ConnectionState.Connected else ConnectionState.Disconnected,
+                        // Auto-show PiP when camera becomes available
+                        isPipVisible = if (isStreaming && !state.isPipVisible && state.mainView == MainView.MAP) true else state.isPipVisible
                     )
                 }
             }
@@ -134,25 +140,29 @@ class MainViewModel(
      */
     fun onEvent(event: MainUiEvent) {
         when (event) {
-            is MainUiEvent.ViewModeChanged -> {
-                _uiState.update { 
-                    it.copy(
-                        viewMode = event.mode,
-                        fullscreenTarget = FullscreenTarget.NONE // Exit fullscreen when changing mode
-                    )
+            // View events
+            is MainUiEvent.SwapViews -> {
+                _uiState.update { state ->
+                    val newMainView = if (state.mainView == MainView.MAP) MainView.CAMERA else MainView.MAP
+                    state.copy(mainView = newMainView)
                 }
             }
             
-            is MainUiEvent.FullscreenChanged -> {
-                _uiState.update { it.copy(fullscreenTarget = event.target) }
+            is MainUiEvent.HidePip -> {
+                _uiState.update { it.copy(isPipVisible = false) }
             }
             
-            is MainUiEvent.ExitFullscreen -> {
-                _uiState.update { it.copy(fullscreenTarget = FullscreenTarget.NONE) }
+            is MainUiEvent.ShowPip -> {
+                _uiState.update { it.copy(isPipVisible = true) }
             }
             
+            is MainUiEvent.ToggleTopBar -> {
+                _uiState.update { it.copy(isTopBarVisible = !it.isTopBarVisible) }
+            }
+            
+            // Track events
             is MainUiEvent.TrackSelected -> {
-                // Navigation to track details handled by UI
+                _uiState.update { it.copy(selectedTrackId = event.trackId) }
             }
             
             is MainUiEvent.TrackLocked -> {
@@ -163,6 +173,19 @@ class MainViewModel(
                 unlockTrack()
             }
             
+            is MainUiEvent.CloseTrackInfo -> {
+                _uiState.update { it.copy(selectedTrackId = null) }
+            }
+            
+            is MainUiEvent.CenterOnSelectedTrack -> {
+                _uiState.value.selectedTrack?.let { track ->
+                    viewModelScope.launch {
+                        _centerOnTrackEvent.emit(track)
+                    }
+                }
+            }
+            
+            // Other events
             is MainUiEvent.SettingsClicked -> {
                 viewModelScope.launch {
                     _navigationEvent.emit(NavigationEvent.OpenSettings)
@@ -231,9 +254,7 @@ class MainViewModel(
         droneRepository.sendGpsTarget(
             target = target,
             onSuccess = {
-                _uiState.update { 
-                    it.copy(toastMessage = "Drone tracking Track $trackId")
-                }
+                // Silent success - no toast spam during continuous tracking
             },
             onError = { error ->
                 _uiState.update { it.copy(errorMessage = error) }
