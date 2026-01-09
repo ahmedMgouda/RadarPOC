@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     // Google Maps
     private var googleMap: GoogleMap? = null
     private val trackMarkers = mutableMapOf<String, Marker>()
+    private var droneMarker: Marker? = null
     
     // Camera Views
     private var cameraView: AutelCodecView? = null
@@ -346,6 +347,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         updatePipVisibility(state)
         updateShowPipButton(state)
         updateLockedTrackChip(state)
+        updateDroneMarker(state.droneLocation)
         updateMapMarkers(state.tracks, state.lockedTrackId)
         updateBottomSheet(state)
         handleToast(state.toastMessage)
@@ -471,6 +473,37 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
+     * Update drone marker on map
+     */
+    private fun updateDroneMarker(droneLocation: DroneLocationUi?) {
+        googleMap?.let { map ->
+            if (droneLocation != null) {
+                val position = LatLng(droneLocation.latitude, droneLocation.longitude)
+                
+                if (droneMarker == null) {
+                    // Create new drone marker (green)
+                    droneMarker = map.addMarker(
+                        MarkerOptions()
+                            .position(position)
+                            .title("Drone")
+                            .snippet("Alt: ${String.format("%.1f", droneLocation.altitude)}m")
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                            .anchor(0.5f, 0.5f)
+                    )
+                } else {
+                    // Update existing marker
+                    droneMarker?.position = position
+                    droneMarker?.snippet = "Alt: ${String.format("%.1f", droneLocation.altitude)}m"
+                }
+            } else {
+                // Remove marker if drone disconnected
+                droneMarker?.remove()
+                droneMarker = null
+            }
+        }
+    }
+    
+    /**
      * Update map markers based on tracks
      * Uses custom square markers with unique colors per track
      * Stale tracks are shown in black
@@ -534,8 +567,21 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             // Update title
             binding.trackInfoTitle.text = "Track ${selectedTrack.id}"
             
-            // Update quick info
-            binding.trackInfoQuick.text = selectedTrack.quickInfo
+            // Calculate distance from drone if available
+            val droneLocation = state.droneLocation
+            val distanceText = if (droneLocation != null) {
+                val distance = selectedTrack.distanceFrom(droneLocation.latitude, droneLocation.longitude)
+                val distanceFormatted = when {
+                    distance < 1000 -> "${distance.toInt()}m"
+                    else -> String.format("%.1fkm", distance / 1000)
+                }
+                "  📏 $distanceFormatted from drone"
+            } else {
+                ""
+            }
+            
+            // Update quick info with distance
+            binding.trackInfoQuick.text = selectedTrack.quickInfo + distanceText
             
             // Update lock button icon
             binding.btnLockTrack.setIconResource(

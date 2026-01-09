@@ -112,6 +112,23 @@ class MainViewModel(
                 }
             }
         }
+        
+        // Observe drone GPS location
+        viewModelScope.launch {
+            droneRepository.droneLocation.collect { location ->
+                _uiState.update { state ->
+                    state.copy(
+                        droneLocation = location?.let {
+                            DroneLocationUi(
+                                latitude = it.latitude,
+                                longitude = it.longitude,
+                                altitude = it.altitude
+                            )
+                        }
+                    )
+                }
+            }
+        }
     }
     
     /**

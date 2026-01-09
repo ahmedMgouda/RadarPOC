@@ -44,7 +44,32 @@ data class TrackUiModel(
         append("  📏 ${String.format("%.0f", altitude)}m")
         append("  💨 ${String.format("%.1f", speed)}m/s")
     }
+    
+    /**
+     * Calculate distance to this track from a given position
+     */
+    fun distanceFrom(lat: Double, lon: Double): Double {
+        val R = 6371000.0 // Earth radius in meters
+        val dLat = Math.toRadians(latitude - lat)
+        val dLon = Math.toRadians(longitude - lon)
+        
+        val a = kotlin.math.sin(dLat / 2).pow(2.0) +
+                kotlin.math.cos(Math.toRadians(lat)) * kotlin.math.cos(Math.toRadians(latitude)) *
+                kotlin.math.sin(dLon / 2).pow(2.0)
+        
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return R * c
+    }
 }
+
+/**
+ * Represents drone location
+ */
+data class DroneLocationUi(
+    val latitude: Double,
+    val longitude: Double,
+    val altitude: Double
+)
 
 /**
  * Main UI State - Single source of truth for the main screen
@@ -64,6 +89,9 @@ data class MainUiState(
     val tracks: List<TrackUiModel> = emptyList(),
     val lockedTrackId: String? = null,
     val selectedTrackId: String? = null,
+    
+    // Drone location
+    val droneLocation: DroneLocationUi? = null,
     
     // UI feedback
     val isLoading: Boolean = false,

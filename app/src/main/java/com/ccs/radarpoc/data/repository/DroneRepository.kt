@@ -2,8 +2,10 @@ package com.ccs.radarpoc.data.repository
 
 import android.util.Log
 import com.autel.common.CallbackWithNoParam
+import com.autel.common.CallbackWithOneParam
 import com.autel.common.CallbackWithOneParamProgress
 import com.autel.common.error.AutelError
+import com.autel.common.flycontroller.evo.EvoFlyControllerInfo
 import com.autel.common.mission.AutelCoordinate3D
 import com.autel.common.mission.MissionType
 import com.autel.common.mission.evo.WaypointHeadingMode
@@ -13,7 +15,9 @@ import com.autel.common.mission.evo2.Evo2WaypointFinishedAction
 import com.autel.common.mission.evo2.Evo2WaypointMission
 import com.autel.sdk.Autel
 import com.autel.sdk.ProductConnectListener
+import com.autel.sdk.flycontroller.Evo2FlyController
 import com.autel.sdk.product.BaseProduct
+import com.autel.sdk.product.Evo2Aircraft
 import com.autel.sdk.video.AutelCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +62,16 @@ class DroneRepository {
     private val _isCameraStreaming = MutableStateFlow(false)
     val isCameraStreaming: StateFlow<Boolean> = _isCameraStreaming.asStateFlow()
     
+    // Drone GPS location
+    data class DroneLocation(
+        val latitude: Double,
+        val longitude: Double,
+        val altitude: Double
+    )
+    
+    private val _droneLocation = MutableStateFlow<DroneLocation?>(null)
+    val droneLocation: StateFlow<DroneLocation?> = _droneLocation.asStateFlow()
+    
     // Product reference
     private var autelProduct: BaseProduct? = null
     private var autelCodec: AutelCodec? = null
@@ -81,6 +95,9 @@ class DroneRepository {
                     _isCameraStreaming.value = true
                     onCameraReady?.invoke(codec)
                 }
+                
+                // Start tracking drone GPS location
+                startDroneGpsTracking(product)
             }
             
             override fun productDisconnected() {
@@ -213,6 +230,31 @@ class DroneRepository {
         mission.finishedAction = Evo2WaypointFinishedAction.RETURN_HOME
         
         return mission
+    }
+    
+    /**
+     * Start tracking drone GPS location
+     */
+    private fun startDroneGpsTracking(product: BaseProduct?) {
+        val flyController = (product as? Evo2Aircraft)?.getFlyController()
+        
+        flyController?.setFlyControllerInfoListener(object : CallbackWithOneParam<EvoFlyControllerInfo> {
+            override fun onSuccess(flyControllerInfo: EvoFlyControllerInfo?) {
+                flyControllerInfo?.getGpsInfo()?.let { gpsInfo ->
+                    val location = DroneLocation(
+                        latitude = gpsInfo.latitude,
+                        longitude = gpsInfo.longitude,
+                        altitude = gpsInfo.altitude
+                    )
+                    _droneLocation.value = location
+                    Log.d(TAG, "Drone GPS updated: $location")
+                }
+            }
+            
+            override fun onFailure(error: AutelError?) {
+                Log.e(TAG, "Failed to get drone GPS: ${error?.description}")
+            }
+        })
     }
     
     /**
