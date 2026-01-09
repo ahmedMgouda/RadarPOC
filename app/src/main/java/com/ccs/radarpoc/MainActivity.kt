@@ -346,7 +346,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         updatePipVisibility(state)
         updateShowPipButton(state)
         updateLockedTrackChip(state)
-        updateMapMarkers(state.tracks)
+        updateMapMarkers(state.tracks, state.lockedTrackId)
         updateBottomSheet(state)
         handleToast(state.toastMessage)
         handleError(state.errorMessage)
@@ -472,8 +472,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
     /**
      * Update map markers based on tracks
+     * Uses custom square markers with unique colors per track
+     * Stale tracks are shown in black
+     * Locked tracks have white border
      */
-    private fun updateMapMarkers(tracks: List<TrackUiModel>) {
+    private fun updateMapMarkers(tracks: List<TrackUiModel>, lockedTrackId: String?) {
         googleMap?.let { map ->
             // Remove markers for tracks that no longer exist
             val currentTrackIds = tracks.map { it.id }.toSet()
@@ -486,24 +489,28 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             // Add or update markers
             tracks.forEach { trackUi ->
                 val position = LatLng(trackUi.latitude, trackUi.longitude)
+                val isLocked = trackUi.id == lockedTrackId
                 
-                val markerColor = when {
-                    trackUi.isLocked -> BitmapDescriptorFactory.HUE_ORANGE
-                    trackUi.isStale -> BitmapDescriptorFactory.HUE_AZURE
-                    else -> BitmapDescriptorFactory.HUE_BLUE
-                }
+                // Create custom square marker
+                val markerIcon = TrackMarkerHelper.createSquareMarker(
+                    context = this,
+                    trackId = trackUi.id,
+                    isStale = trackUi.isStale,
+                    isLocked = isLocked
+                )
                 
                 val marker = trackMarkers[trackUi.id]
                 if (marker != null) {
                     marker.position = position
-                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(markerColor))
+                    marker.setIcon(markerIcon)
                     marker.title = trackUi.displayTitle
                 } else {
                     val newMarker = map.addMarker(
                         MarkerOptions()
                             .position(position)
                             .title(trackUi.displayTitle)
-                            .icon(BitmapDescriptorFactory.defaultMarker(markerColor))
+                            .icon(markerIcon)
+                            .anchor(0.5f, 0.5f)  // Center the square marker
                     )
                     newMarker?.tag = trackUi.id
                     if (newMarker != null) {
@@ -584,5 +591,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onDestroy() {
         super.onDestroy()
         cleanupCameraView()
+        TrackMarkerHelper.clearCache()
     }
 }
