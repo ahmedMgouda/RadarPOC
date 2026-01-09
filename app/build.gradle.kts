@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -15,7 +17,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.ccs.radarpoc.HiltTestRunner"
     }
 
     buildTypes {
@@ -49,6 +51,12 @@ android {
             pickFirsts.add("lib/armeabi-v7a/libAutelUtil.so")
         }
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -67,8 +75,11 @@ dependencies {
     // OSMDroid (OpenStreetMap) - Offline maps
     implementation("org.osmdroid:osmdroid-android:6.1.18")
 
-    // Networking
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Networking - Retrofit with OkHttp
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
     implementation("com.google.code.gson:gson:2.10.1")
 
     // Coroutines
@@ -82,13 +93,30 @@ dependencies {
     // Activity KTX - Required for viewModels() delegate
     implementation("androidx.activity:activity-ktx:1.8.2")
     
-    // Fragment KTX (optional but useful)
+    // Fragment KTX
     implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    // Hilt Dependency Injection
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     // Autel SDK
     implementation(files("libs/autel-sdk-release.aar"))
 
+    // Unit Testing
     testImplementation(libs.junit)
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.kotlin)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.arch.core.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.hilt.testing)
+    kspTest(libs.hilt.compiler)
+
+    // Android Instrumentation Testing
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.hilt.testing)
+    kspAndroidTest(libs.hilt.compiler)
 }
