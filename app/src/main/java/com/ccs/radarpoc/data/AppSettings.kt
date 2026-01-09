@@ -15,12 +15,14 @@ class AppSettings(context: Context) {
         private const val KEY_POLL_INTERVAL = "poll_interval"
         private const val KEY_STALE_TIMEOUT = "stale_timeout"
         private const val KEY_MISSION_UPDATE_INTERVAL = "mission_update_interval"
+        private const val KEY_MINIMUM_DISTANCE = "minimum_distance"
         
         // Default values
         const val DEFAULT_RADAR_BASE_URL = "http://192.168.1.100:8080"
         const val DEFAULT_POLL_INTERVAL = 1 // seconds
         const val DEFAULT_STALE_TIMEOUT = 5 // seconds
         const val DEFAULT_MISSION_UPDATE_INTERVAL = 3 // seconds
+        const val DEFAULT_MINIMUM_DISTANCE = 5.0 // meters
     }
     
     var radarBaseUrl: String
@@ -38,4 +40,8 @@ class AppSettings(context: Context) {
     var missionUpdateInterval: Int
         get() = prefs.getInt(KEY_MISSION_UPDATE_INTERVAL, DEFAULT_MISSION_UPDATE_INTERVAL)
         set(value) = prefs.edit().putInt(KEY_MISSION_UPDATE_INTERVAL, value).apply()
+    
+    var minimumDistanceMeters: Double
+        get() = prefs.getFloat(KEY_MINIMUM_DISTANCE, DEFAULT_MINIMUM_DISTANCE.toFloat()).toDouble()
+        set(value) = prefs.edit().putFloat(KEY_MINIMUM_DISTANCE, value.toFloat()).apply()
 }
