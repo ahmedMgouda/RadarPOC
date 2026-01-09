@@ -125,12 +125,7 @@
                     android:layout_marginStart="8dp"
                     android:background="@drawable/bg_status_dot_disconnected" />
 
-                <!-- Track Count Badge -->
-                <com.google.android.material.badge.BadgeDrawable
-                    android:id="@+id/trackBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-
+                <!-- Track Count with Icon -->
                 <TextView
                     android:id="@+id/trackCount"
                     android:layout_width="wrap_content"
@@ -141,6 +136,7 @@
                     android:textStyle="bold"
                     android:drawableStart="@drawable/ic_track"
                     android:drawablePadding="4dp"
+                    android:drawableTint="@android:color/white"
                     tools:text="5" />
 
             </LinearLayout>
