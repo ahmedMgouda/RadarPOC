@@ -57,6 +57,12 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("com.google.android.material:material:1.11.0")
+    
+    // CoordinatorLayout (for bottom sheet)
+    implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
+    
+    // CardView (for PiP)
+    implementation("androidx.cardview:cardview:1.0.0")
 
     // Google Maps
     implementation("com.google.android.gms:play-services-maps:18.2.0")
