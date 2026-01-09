@@ -19,15 +19,14 @@ import com.autel.sdk.ProductConnectListener
 import com.autel.sdk.product.BaseProduct
 import com.autel.sdk.product.Evo2Aircraft
 import com.autel.sdk.video.AutelCodec
+import com.ccs.radarpoc.domain.repository.IDroneRepository
+import com.ccs.radarpoc.util.GeoUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Data class representing GPS coordinates for drone navigation
@@ -52,83 +51,83 @@ sealed class DroneOperationResult {
  * Tracking state for UI feedback
  */
 enum class TrackingState {
-    IDLE,           // Not tracking any target
-    TRACKING,       // Actively tracking a target
-    STOPPING        // In process of stopping (hover transition)
+    IDLE,
+    TRACKING,
+    STOPPING
 }
 
 /**
  * Battery state data
  */
 data class DroneBatteryState(
-    val percentage: Int,          // 0-100
-    val voltage: Float,           // Volts
-    val temperature: Float,       // Celsius
+    val percentage: Int,
+    val voltage: Float,
+    val temperature: Float,
     val isCharging: Boolean,
-    val remainingFlightTime: Int  // Seconds
+    val remainingFlightTime: Int
 ) {
     val isLow: Boolean get() = percentage <= 20
     val isCritical: Boolean get() = percentage <= 10
 }
 
 /**
- * Repository for drone operations
- * Handles connection, camera feed, GPS commands, and battery monitoring
+ * Data class representing drone GPS location
  */
-class DroneRepository(
-    private val missionUpdateIntervalMs: Long = 3000L,      // Minimum time between mission updates
-    private val minimumDistanceMeters: Double = 5.0         // Minimum distance change to trigger update
-) {
+data class DroneLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val altitude: Double
+)
+
+/**
+ * Configuration for drone repository
+ */
+data class DroneConfig(
+    val missionUpdateIntervalMs: Long = 3000L,
+    val minimumDistanceMeters: Double = 5.0
+)
+
+/**
+ * Repository for drone operations.
+ * Implements IDroneRepository interface for proper abstraction.
+ */
+@Singleton
+class DroneRepository @Inject constructor(
+    private val config: DroneConfig
+) : IDroneRepository {
+    
     companion object {
         private const val TAG = "DroneRepository"
         private const val DEFAULT_DRONE_SPEED = 5.0f
-        private const val DEFAULT_HOVER_TIME = 0  // Don't hover at waypoint, we'll keep updating
-        private const val EARTH_RADIUS_METERS = 6371000.0
+        private const val DEFAULT_HOVER_TIME = 0
     }
     
-    // Mission tracking for optimization
     private var currentMissionId: String? = null
     private var lastMissionUpdateTime = 0L
     private var lastSentTarget: DroneGpsTarget? = null
     
-    // Tracking state
     private val _trackingState = MutableStateFlow(TrackingState.IDLE)
-    val trackingState: StateFlow<TrackingState> = _trackingState.asStateFlow()
+    override val trackingState: StateFlow<TrackingState> = _trackingState.asStateFlow()
     
-    // Connection state
     private val _isConnected = MutableStateFlow(false)
-    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+    override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
     
-    // Camera state
     private val _isCameraStreaming = MutableStateFlow(false)
-    val isCameraStreaming: StateFlow<Boolean> = _isCameraStreaming.asStateFlow()
-    
-    // Drone GPS location
-    data class DroneLocation(
-        val latitude: Double,
-        val longitude: Double,
-        val altitude: Double
-    )
+    override val isCameraStreaming: StateFlow<Boolean> = _isCameraStreaming.asStateFlow()
     
     private val _droneLocation = MutableStateFlow<DroneLocation?>(null)
-    val droneLocation: StateFlow<DroneLocation?> = _droneLocation.asStateFlow()
+    override val droneLocation: StateFlow<DroneLocation?> = _droneLocation.asStateFlow()
     
-    // Battery state
     private val _batteryState = MutableStateFlow<DroneBatteryState?>(null)
-    val batteryState: StateFlow<DroneBatteryState?> = _batteryState.asStateFlow()
+    override val batteryState: StateFlow<DroneBatteryState?> = _batteryState.asStateFlow()
     
-    // Product reference
     private var autelProduct: BaseProduct? = null
     private var autelCodec: AutelCodec? = null
     
-    // Callbacks for UI layer
     private var onCameraReady: ((AutelCodec) -> Unit)? = null
     private var onCameraDisconnected: (() -> Unit)? = null
     
-    /**
-     * Initialize drone SDK and register connection listener
-     */
-    fun initialize() {
+    override fun initialize() {
         Autel.setProductConnectListener(object : ProductConnectListener {
             override fun productConnected(product: BaseProduct?) {
                 Log.d(TAG, "Drone connected")
@@ -141,10 +140,7 @@ class DroneRepository(
                     onCameraReady?.invoke(codec)
                 }
                 
-                // Start tracking drone GPS location
                 startDroneGpsTracking(product)
-                
-                // Start battery monitoring
                 startBatteryMonitoring(product)
             }
             
@@ -163,17 +159,13 @@ class DroneRepository(
         })
     }
     
-    /**
-     * Set camera callbacks for UI layer
-     */
-    fun setCameraCallbacks(
+    override fun setCameraCallbacks(
         onReady: (AutelCodec) -> Unit,
         onDisconnected: () -> Unit
     ) {
         onCameraReady = onReady
         onCameraDisconnected = onDisconnected
         
-        // If already connected, invoke callback immediately
         autelCodec?.let { codec ->
             if (_isConnected.value) {
                 onReady(codec)
@@ -181,19 +173,12 @@ class DroneRepository(
         }
     }
     
-    /**
-     * Get the current codec for camera feed
-     */
-    fun getCodec(): AutelCodec? = autelCodec
+    override fun getCodec(): AutelCodec? = autelCodec
     
-    /**
-     * Send GPS coordinates to drone for tracking
-     * Optimized with rate limiting and distance threshold
-     */
-    fun sendGpsTarget(
+    override fun sendGpsTarget(
         target: DroneGpsTarget,
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
     ): DroneOperationResult {
         if (!_isConnected.value || autelProduct == null) {
             return DroneOperationResult.NotConnected
@@ -202,20 +187,18 @@ class DroneRepository(
         val currentTime = System.currentTimeMillis()
         val timeSinceLastUpdate = currentTime - lastMissionUpdateTime
         
-        // Rate limiting: Check if enough time has passed since last update
-        if (timeSinceLastUpdate < missionUpdateIntervalMs && lastSentTarget != null) {
-            Log.d(TAG, "Rate limit: Skipping update (${timeSinceLastUpdate}ms < ${missionUpdateIntervalMs}ms)")
-            return DroneOperationResult.Success // Silent skip
+        if (timeSinceLastUpdate < config.missionUpdateIntervalMs && lastSentTarget != null) {
+            Log.d(TAG, "Rate limit: Skipping update")
+            return DroneOperationResult.Success
         }
         
-        // Distance threshold: Check if target moved enough
         lastSentTarget?.let { last ->
-            val distance = calculateDistance(
+            val distance = GeoUtils.distanceMeters(
                 last.latitude, last.longitude,
                 target.latitude, target.longitude
             )
-            if (distance < minimumDistanceMeters) {
-                Log.d(TAG, "Target barely moved (${String.format("%.1f", distance)}m < ${minimumDistanceMeters}m), skipping")
+            if (distance < config.minimumDistanceMeters) {
+                Log.d(TAG, "Target barely moved, skipping")
                 return DroneOperationResult.Success
             }
         }
@@ -229,10 +212,8 @@ class DroneRepository(
                 return DroneOperationResult.Error(error)
             }
             
-            // Update state
             _trackingState.value = TrackingState.TRACKING
             
-            // Cancel any existing mission before starting new one
             if (currentMissionId != null) {
                 Log.d(TAG, "Canceling previous mission: $currentMissionId")
                 missionManager.cancelMission(object : CallbackWithNoParam {
@@ -243,7 +224,6 @@ class DroneRepository(
                     
                     override fun onFailure(error: AutelError?) {
                         Log.w(TAG, "Failed to cancel previous mission: ${error?.description}")
-                        // Start new mission anyway
                         startNewMission(target, missionManager, onSuccess, onError)
                     }
                 })
@@ -251,7 +231,6 @@ class DroneRepository(
                 startNewMission(target, missionManager, onSuccess, onError)
             }
             
-            // Update tracking variables
             lastMissionUpdateTime = currentTime
             lastSentTarget = target
             
@@ -265,16 +244,11 @@ class DroneRepository(
         }
     }
     
-    /**
-     * Stop tracking and hover in place
-     * Call this when user unlocks a track or target is lost
-     */
-    fun stopTrackingAndHover(
-        onSuccess: () -> Unit = {},
-        onError: (String) -> Unit = {}
+    override fun stopTrackingAndHover(
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
     ): DroneOperationResult {
         if (!_isConnected.value || autelProduct == null) {
-            // Not connected, just reset state
             resetTrackingState()
             return DroneOperationResult.NotConnected
         }
@@ -288,7 +262,6 @@ class DroneRepository(
             return DroneOperationResult.Error("Mission manager not available")
         }
         
-        // Cancel current mission - drone should hover automatically when mission canceled
         if (currentMissionId != null) {
             missionManager.cancelMission(object : CallbackWithNoParam {
                 override fun onSuccess() {
@@ -305,7 +278,6 @@ class DroneRepository(
                 }
             })
         } else {
-            // No active mission, just reset state
             resetTrackingState()
             onSuccess()
         }
@@ -313,9 +285,6 @@ class DroneRepository(
         return DroneOperationResult.Success
     }
     
-    /**
-     * Reset tracking state variables
-     */
     private fun resetTrackingState() {
         currentMissionId = null
         lastSentTarget = null
@@ -323,9 +292,6 @@ class DroneRepository(
         _trackingState.value = TrackingState.IDLE
     }
     
-    /**
-     * Start a new waypoint mission
-     */
     private fun startNewMission(
         target: DroneGpsTarget,
         missionManager: com.autel.sdk.mission.MissionManager,
@@ -336,7 +302,6 @@ class DroneRepository(
         currentMissionId = mission.GUID
         
         Log.d(TAG, "Starting mission: $currentMissionId for track ${target.trackId}")
-        Log.d(TAG, "Target: ${target.latitude}, ${target.longitude}, alt: ${target.altitude}")
         
         missionManager.prepareMission(mission, object : CallbackWithOneParamProgress<Boolean> {
             override fun onProgress(progress: Float) {
@@ -370,40 +335,18 @@ class DroneRepository(
         })
     }
     
-    /**
-     * Calculate distance between two GPS coordinates using Haversine formula
-     */
-    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        
-        val a = sin(dLat / 2).pow(2.0) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2).pow(2.0)
-        
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return EARTH_RADIUS_METERS * c
-    }
-    
-    /**
-     * Create a waypoint mission for the target
-     */
     private fun createWaypointMission(target: DroneGpsTarget): Evo2WaypointMission {
         val mission = Evo2WaypointMission().apply {
             missionId = 1
             missionType = MissionType.Waypoint
-            altitudeType = 1 // 0=relative, 1=absolute altitude
+            altitudeType = 1
             MissionName = "Track_${target.trackId}"
             GUID = UUID.randomUUID().toString().replace("-", "")
-            missionAction = 0 // Normal flight
+            missionAction = 0
         }
         
         val waypoint = Evo2Waypoint(
-            AutelCoordinate3D(
-                target.latitude,
-                target.longitude,
-                target.altitude
-            )
+            AutelCoordinate3D(target.latitude, target.longitude, target.altitude)
         ).apply {
             wSpeed = DEFAULT_DRONE_SPEED
             poiIndex = -1
@@ -414,15 +357,11 @@ class DroneRepository(
         }
         
         mission.wpList = listOf(waypoint)
-        // Hover at end instead of RTH - we'll keep updating the target
         mission.finishedAction = Evo2WaypointFinishedAction.KEEP_ON_LAST_POINT
         
         return mission
     }
     
-    /**
-     * Start tracking drone GPS location
-     */
     private fun startDroneGpsTracking(product: BaseProduct?) {
         val flyController = (product as? Evo2Aircraft)?.flyController
         
@@ -443,9 +382,6 @@ class DroneRepository(
         })
     }
     
-    /**
-     * Start battery monitoring
-     */
     private fun startBatteryMonitoring(product: BaseProduct?) {
         val battery = (product as? Evo2Aircraft)?.battery
         
@@ -464,47 +400,22 @@ class DroneRepository(
                     isCharging = isCharging,
                     remainingFlightTime = remainingTime
                 )
-                
-                Log.d(TAG, "Battery: $percentage%, ${voltage}V, ${temperature}°C, remaining: ${remainingTime}s")
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing battery state: ${e.message}")
             }
         }
     }
     
-    /**
-     * Get current battery percentage
-     * @return Battery percentage (0-100) or null if not available
-     */
-    fun getBatteryPercentage(): Int? = _batteryState.value?.percentage
+    override fun getBatteryPercentage(): Int? = _batteryState.value?.percentage
+    override fun isBatteryLow(): Boolean = _batteryState.value?.isLow == true
+    override fun isBatteryCritical(): Boolean = _batteryState.value?.isCritical == true
+    override fun isTracking(): Boolean = _trackingState.value == TrackingState.TRACKING
     
-    /**
-     * Check if battery is low (≤20%)
-     */
-    fun isBatteryLow(): Boolean = _batteryState.value?.isLow == true
-    
-    /**
-     * Check if battery is critical (≤10%)
-     */
-    fun isBatteryCritical(): Boolean = _batteryState.value?.isCritical == true
-    
-    /**
-     * Check if currently tracking a target
-     */
-    fun isTracking(): Boolean = _trackingState.value == TrackingState.TRACKING
-    
-    /**
-     * Cancel current codec operations
-     */
-    fun cancelCodec() {
+    override fun cancelCodec() {
         autelCodec?.cancel()
     }
     
-    /**
-     * Clean up resources
-     */
-    fun cleanup() {
-        // Stop any active tracking
+    override fun cleanup() {
         if (isTracking()) {
             stopTrackingAndHover()
         }
