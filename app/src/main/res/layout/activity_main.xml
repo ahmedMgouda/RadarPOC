@@ -178,35 +178,62 @@
         android:padding="16dp">
 
         <!-- Show PiP Button (left side, shown when PiP is hidden) -->
-        <com.google.android.material.button.MaterialButton
+        <ImageButton
             android:id="@+id/btnShowPip"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_gravity="start|bottom"
-            android:minWidth="48dp"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
+            android:background="@drawable/bg_floating_button"
+            android:src="@drawable/ic_camera"
+            android:scaleType="centerInside"
+            android:padding="12dp"
+            app:tint="@android:color/white"
             android:visibility="gone"
-            app:icon="@drawable/ic_camera"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            app:cornerRadius="20dp"
-            style="@style/Widget.Material3.Button.TonalButton"
+            android:contentDescription="@string/show_camera"
             tools:visibility="visible" />
 
         <!-- Locked Track Chip (right side, shown when track is locked) -->
-        <com.google.android.material.chip.Chip
+        <LinearLayout
             android:id="@+id/lockedTrackChip"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_gravity="end|bottom"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_locked_chip"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp"
             android:visibility="gone"
-            app:chipIcon="@drawable/ic_lock"
-            app:closeIconVisible="true"
-            app:chipBackgroundColor="#CC000000"
-            android:textColor="@android:color/white"
-            tools:text="Track 357"
-            tools:visibility="visible" />
+            tools:visibility="visible">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_lock"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:id="@+id/lockedTrackText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                tools:text="Track 357" />
+
+            <ImageButton
+                android:id="@+id/btnUnlockTrack"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_close"
+                android:scaleType="centerInside"
+                android:padding="8dp"
+                app:tint="@android:color/white"
+                android:contentDescription="@string/track_unlock" />
+
+        </LinearLayout>
 
     </FrameLayout>
 
@@ -378,13 +405,14 @@
                 android:background="#33FFFFFF" />
 
             <!-- Action Button -->
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/btnCenterOnTrack"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="📍 Center on Map"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                android:text="@string/center_on_map"
+                android:textColor="@android:color/white"
+                android:background="@drawable/bg_outlined_button" />
 
         </LinearLayout>
 
