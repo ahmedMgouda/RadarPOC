@@ -41,11 +41,6 @@
         android:usesCleartextTraffic="true"
         tools:replace="android:allowBackup">
 
-        <!-- Google Maps API Key -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="YOUR_GOOGLE_MAPS_API_KEY_HERE" />
-
         <!-- Main Activity -->
         <activity
             android:name=".MainActivity"

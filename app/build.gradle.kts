@@ -64,9 +64,8 @@ dependencies {
     // CardView (for PiP)
     implementation("androidx.cardview:cardview:1.0.0")
 
-    // Google Maps
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.android.gms:play-services-location:21.1.0")
+    // OSMDroid (OpenStreetMap) - Offline maps
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

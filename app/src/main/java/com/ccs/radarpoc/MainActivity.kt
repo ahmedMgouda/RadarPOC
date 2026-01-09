@@ -2,6 +2,8 @@ package com.ccs.radarpoc
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -11,6 +13,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.GestureDetectorCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -19,26 +22,31 @@ import com.autel.sdk.widget.AutelCodecView
 import com.ccs.radarpoc.data.AppSettings
 import com.ccs.radarpoc.databinding.ActivityMainBinding
 import com.ccs.radarpoc.ui.main.*
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Overlay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 /**
  * Main Activity - Material Design 3 UI with draggable PiP
+ * Using OSMDroid for full offline map support
  */
-class MainActivity : AppCompatActivity(), OnMapReadyCallback {
+class MainActivity : AppCompatActivity() {
     
     companion object {
         private const val TAG = "MainActivity"
-        private const val DEFAULT_ZOOM = 15f
+        private const val DEFAULT_ZOOM = 15.0
         private const val DEFAULT_LAT = 30.0444  // Cairo, Egypt
         private const val DEFAULT_LNG = 31.2357
         private const val PIP_MARGIN = 16
+        private const val MARKER_CLICK_THRESHOLD = 50f // pixels
         
         // Alpha values for status icons
         private const val ALPHA_CONNECTED = 1.0f
@@ -53,8 +61,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         MainViewModelFactory(AppSettings(this))
     }
     
-    // Google Maps
-    private var googleMap: GoogleMap? = null
+    // OSMDroid MapView
+    private var mapView: MapView? = null
     private val trackMarkers = mutableMapOf<String, Marker>()
     private var droneMarker: Marker? = null
     
@@ -81,7 +89,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         setupBottomSheet()
         setupPipGestures()
         setupClickListeners()
-        setupGoogleMaps()
+        setupOSMDroid()
         setupDroneCamera()
         observeState()
         observeNavigation()
@@ -216,39 +224,90 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
-     * Setup Google Maps
+     * Setup OSMDroid map for offline operation
      */
-    private fun setupGoogleMaps() {
-        val mapFragment = supportFragmentManager
-            .findFragmentById(R.id.mapFragment) as SupportMapFragment
-        mapFragment.getMapAsync(this)
+    private fun setupOSMDroid() {
+        // Configure OSMDroid
+        Configuration.getInstance().load(
+            applicationContext,
+            getSharedPreferences("osmdroid", MODE_PRIVATE)
+        )
+        
+        // Get MapView reference from layout
+        mapView = binding.mapView
+        
+        // Configure map
+        mapView?.apply {
+            // Set tile source (Mapnik = standard OpenStreetMap)
+            setTileSource(TileSourceFactory.MAPNIK)
+            
+            // Enable multi-touch controls (pinch to zoom)
+            setMultiTouchControls(true)
+            
+            // Set initial position
+            controller.setZoom(DEFAULT_ZOOM)
+            controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LNG))
+            
+            // IMPORTANT: Enable offline mode for field deployment
+            setUseDataConnection(false) // Set to true if you need online tiles
+            
+            // Add marker click handler overlay
+            setupMarkerClickListener()
+            
+            // Add map tap listener for closing bottom sheet
+            setupMapTapListener()
+        }
     }
     
-    override fun onMapReady(map: GoogleMap) {
-        googleMap = map
-        
-        // Set default location
-        val defaultLocation = LatLng(DEFAULT_LAT, DEFAULT_LNG)
-        googleMap?.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, DEFAULT_ZOOM))
-        
-        // Enable zoom controls
-        googleMap?.uiSettings?.isZoomControlsEnabled = true
-        
-        // Set marker click listener
-        googleMap?.setOnMarkerClickListener { marker ->
-            val trackId = marker.tag as? String
-            if (trackId != null) {
-                viewModel.onEvent(MainUiEvent.TrackSelected(trackId))
-                showTrackBottomSheet()
+    /**
+     * Setup marker click detection overlay
+     */
+    private fun setupMarkerClickListener() {
+        mapView?.overlays?.add(object : Overlay() {
+            override fun onSingleTapConfirmed(e: MotionEvent, mapView: MapView): Boolean {
+                val projection = mapView.projection
+                
+                // Find closest marker within threshold
+                var closestMarker: Marker? = null
+                var minDistance = Float.MAX_VALUE
+                
+                mapView.overlays.filterIsInstance<Marker>().forEach { marker ->
+                    val markerPoint = projection.toPixels(marker.position, null)
+                    val distance = sqrt(
+                        (markerPoint.x - e.x).pow(2) + (markerPoint.y - e.y).pow(2)
+                    )
+                    
+                    if (distance < MARKER_CLICK_THRESHOLD && distance < minDistance) {
+                        closestMarker = marker
+                        minDistance = distance
+                    }
+                }
+                
+                // Handle marker click
+                closestMarker?.let { marker ->
+                    val trackId = marker.id
+                    viewModel.onEvent(MainUiEvent.TrackSelected(trackId))
+                    showTrackBottomSheet()
+                    return true
+                }
+                
+                return false
             }
-            true
-        }
-        
-        // Tap on map to close bottom sheet
-        googleMap?.setOnMapClickListener {
-            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_HIDDEN) {
-                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+        })
+    }
+    
+    /**
+     * Setup map tap listener for bottom sheet closing
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupMapTapListener() {
+        mapView?.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_UP) {
+                if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_HIDDEN) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+                }
             }
+            false // Allow other touch events
         }
     }
     
@@ -329,9 +388,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.centerOnTrackEvent.collect { track ->
-                    googleMap?.animateCamera(
-                        CameraUpdateFactory.newLatLng(LatLng(track.latitude, track.longitude))
-                    )
+                    // OSMDroid: animate to position
+                    mapView?.controller?.animateTo(GeoPoint(track.latitude, track.longitude))
                 }
             }
         }
@@ -372,7 +430,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
     /**
      * Update status icons (radar and drone) based on connection state
-     * Connected = full opacity (1.0), Disconnected = dimmed (0.4)
      */
     private fun updateStatusIcons(state: MainUiState) {
         // Radar status icon
@@ -423,8 +480,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
                 binding.cameraContainer.visibility = View.VISIBLE
                 
-                // Map is always visible (behind), PiP shows mini map
-                // For simplicity, we don't have mini-map in PiP, just hide PiP when camera is main
+                // Hide PiP when camera is main
                 binding.pipContentContainer.removeAllViews()
             }
         }
@@ -443,7 +499,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
     /**
      * Update show PiP FAB visibility
-     * Show when drone is connected (even if camera not streaming yet)
      */
     private fun updateShowPipButton(state: MainUiState) {
         val shouldShowButton = state.isDroneConnected && 
@@ -452,7 +507,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         
         if (shouldShowButton) {
             binding.btnShowPip.show()
-            // Dim the FAB if camera not actually available yet
             binding.btnShowPip.alpha = if (state.isCameraAvailable) 1.0f else 0.6f
         } else {
             binding.btnShowPip.hide()
@@ -473,85 +527,96 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
-     * Update drone marker on map
+     * Update drone marker on map (OSMDroid version)
      */
     private fun updateDroneMarker(droneLocation: DroneLocationUi?) {
-        googleMap?.let { map ->
+        mapView?.let { map ->
             if (droneLocation != null) {
-                val position = LatLng(droneLocation.latitude, droneLocation.longitude)
+                val position = GeoPoint(droneLocation.latitude, droneLocation.longitude)
                 
                 if (droneMarker == null) {
                     // Create new drone marker (green)
-                    droneMarker = map.addMarker(
-                        MarkerOptions()
-                            .position(position)
-                            .title("Drone")
-                            .snippet("Alt: ${String.format("%.1f", droneLocation.altitude)}m")
-                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
-                            .anchor(0.5f, 0.5f)
-                    )
+                    droneMarker = Marker(map).apply {
+                        this.position = position
+                        title = "Drone"
+                        snippet = "Alt: ${String.format("%.1f", droneLocation.altitude)}m"
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        // Use green tint for drone
+                        icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_drone)?.apply {
+                            setTint(Color.GREEN)
+                        }
+                        id = "drone"
+                    }
+                    map.overlays.add(droneMarker)
                 } else {
                     // Update existing marker
                     droneMarker?.position = position
                     droneMarker?.snippet = "Alt: ${String.format("%.1f", droneLocation.altitude)}m"
                 }
+                map.invalidate()
             } else {
                 // Remove marker if drone disconnected
-                droneMarker?.remove()
+                droneMarker?.let { map.overlays.remove(it) }
                 droneMarker = null
+                map.invalidate()
             }
         }
     }
     
     /**
-     * Update map markers based on tracks
-     * Uses custom square markers with unique colors per track
-     * Stale tracks are shown in black
-     * Locked tracks have white border
+     * Update map markers based on tracks (OSMDroid version)
      */
     private fun updateMapMarkers(tracks: List<TrackUiModel>, lockedTrackId: String?) {
-        googleMap?.let { map ->
+        mapView?.let { map ->
             // Remove markers for tracks that no longer exist
             val currentTrackIds = tracks.map { it.id }.toSet()
             val markersToRemove = trackMarkers.keys.filter { it !in currentTrackIds }
             markersToRemove.forEach { id ->
-                trackMarkers[id]?.remove()
+                trackMarkers[id]?.let { map.overlays.remove(it) }
                 trackMarkers.remove(id)
             }
             
             // Add or update markers
             tracks.forEach { trackUi ->
-                val position = LatLng(trackUi.latitude, trackUi.longitude)
+                val position = GeoPoint(trackUi.latitude, trackUi.longitude)
                 val isLocked = trackUi.id == lockedTrackId
-                
-                // Create custom square marker
-                val markerIcon = TrackMarkerHelper.createSquareMarker(
-                    context = this,
-                    trackId = trackUi.id,
-                    isStale = trackUi.isStale,
-                    isLocked = isLocked
-                )
                 
                 val marker = trackMarkers[trackUi.id]
                 if (marker != null) {
+                    // Update existing marker
                     marker.position = position
-                    marker.setIcon(markerIcon)
                     marker.title = trackUi.displayTitle
+                    // Update icon based on lock/stale state
+                    marker.icon = createTrackMarkerIcon(trackUi.id, trackUi.isStale, isLocked)
                 } else {
-                    val newMarker = map.addMarker(
-                        MarkerOptions()
-                            .position(position)
-                            .title(trackUi.displayTitle)
-                            .icon(markerIcon)
-                            .anchor(0.5f, 0.5f)  // Center the square marker
-                    )
-                    newMarker?.tag = trackUi.id
-                    if (newMarker != null) {
-                        trackMarkers[trackUi.id] = newMarker
+                    // Create new marker
+                    val newMarker = Marker(map).apply {
+                        this.position = position
+                        title = trackUi.displayTitle
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        icon = createTrackMarkerIcon(trackUi.id, trackUi.isStale, isLocked)
+                        id = trackUi.id
                     }
+                    map.overlays.add(newMarker)
+                    trackMarkers[trackUi.id] = newMarker
                 }
             }
+            
+            map.invalidate() // Must call to refresh display
         }
+    }
+    
+    /**
+     * Create marker icon for track
+     */
+    private fun createTrackMarkerIcon(trackId: String, isStale: Boolean, isLocked: Boolean): BitmapDrawable {
+        // Use existing TrackMarkerHelper which creates bitmaps
+        return TrackMarkerHelper.createSquareMarker(
+            context = this,
+            trackId = trackId,
+            isStale = isStale,
+            isLocked = isLocked
+        ) as BitmapDrawable
     }
     
     /**
@@ -626,16 +691,19 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
     override fun onResume() {
         super.onResume()
+        mapView?.onResume() // OSMDroid lifecycle
         viewModel.startRadarPolling()
     }
     
     override fun onPause() {
         super.onPause()
+        mapView?.onPause() // OSMDroid lifecycle
         viewModel.stopRadarPolling()
     }
     
     override fun onDestroy() {
         super.onDestroy()
+        mapView?.onDetach() // OSMDroid lifecycle
         cleanupCameraView()
         TrackMarkerHelper.clearCache()
     }

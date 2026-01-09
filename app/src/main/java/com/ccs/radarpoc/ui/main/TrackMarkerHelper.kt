@@ -5,8 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import com.google.android.gms.maps.model.BitmapDescriptor
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import android.graphics.drawable.BitmapDrawable
 
 /**
  * Helper class to create custom square markers for tracks
@@ -46,7 +45,7 @@ object TrackMarkerHelper {
     private val LOCKED_BORDER_COLOR = Color.WHITE
     
     // Cache for marker bitmaps to avoid recreating
-    private val markerCache = mutableMapOf<String, BitmapDescriptor>()
+    private val markerCache = mutableMapOf<String, BitmapDrawable>()
     
     /**
      * Get a color for a track based on its ID
@@ -58,7 +57,7 @@ object TrackMarkerHelper {
     }
     
     /**
-     * Create a square marker bitmap descriptor
+     * Create a square marker bitmap drawable for OSMDroid
      * @param trackId The track ID (used to determine color)
      * @param isStale Whether the track is stale (will be black)
      * @param isLocked Whether the track is locked (will have white border)
@@ -68,7 +67,7 @@ object TrackMarkerHelper {
         trackId: String,
         isStale: Boolean = false,
         isLocked: Boolean = false
-    ): BitmapDescriptor {
+    ): BitmapDrawable {
         // Create cache key
         val cacheKey = "${trackId}_${isStale}_${isLocked}"
         
@@ -106,11 +105,11 @@ object TrackMarkerHelper {
             borderPaint
         )
         
-        // Create descriptor and cache it
-        val descriptor = BitmapDescriptorFactory.fromBitmap(bitmap)
-        markerCache[cacheKey] = descriptor
+        // Create drawable and cache it (OSMDroid compatible)
+        val drawable = BitmapDrawable(context.resources, bitmap)
+        markerCache[cacheKey] = drawable
         
-        return descriptor
+        return drawable
     }
     
     /**
