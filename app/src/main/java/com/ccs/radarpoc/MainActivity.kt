@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
- * Main Activity - Minimal UI with draggable PiP
+ * Main Activity - Material Design 3 UI with draggable PiP
  */
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
@@ -171,7 +171,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             viewModel.onEvent(MainUiEvent.SettingsClicked)
         }
         
-        // Show PiP button
+        // Show PiP FAB
         binding.btnShowPip.setOnClickListener {
             viewModel.onEvent(MainUiEvent.ShowPip)
         }
@@ -184,8 +184,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
         
-        // Unlock button on chip
-        binding.btnUnlockTrack.setOnClickListener {
+        // Chip close icon = unlock
+        binding.lockedTrackChip.setOnCloseIconClickListener {
             viewModel.onEvent(MainUiEvent.TrackUnlocked)
         }
         
@@ -439,14 +439,18 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     
     /**
-     * Update show PiP button visibility
+     * Update show PiP FAB visibility
      */
     private fun updateShowPipButton(state: MainUiState) {
         val shouldShowButton = !state.isPipVisible && 
             state.isCameraAvailable && 
             state.mainView == MainView.MAP
         
-        binding.btnShowPip.visibility = if (shouldShowButton) View.VISIBLE else View.GONE
+        if (shouldShowButton) {
+            binding.btnShowPip.show()
+        } else {
+            binding.btnShowPip.hide()
+        }
     }
     
     /**
@@ -455,7 +459,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun updateLockedTrackChip(state: MainUiState) {
         val lockedTrack = state.lockedTrack
         if (lockedTrack != null) {
-            binding.lockedTrackText.text = "Track ${lockedTrack.id}"
+            binding.lockedTrackChip.text = "Track ${lockedTrack.id}"
             binding.lockedTrackChip.visibility = View.VISIBLE
         } else {
             binding.lockedTrackChip.visibility = View.GONE
@@ -523,7 +527,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             binding.trackInfoQuick.text = selectedTrack.quickInfo
             
             // Update lock button icon
-            binding.btnLockTrack.setImageResource(
+            binding.btnLockTrack.setIconResource(
                 if (isLocked) R.drawable.ic_lock else R.drawable.ic_lock_open
             )
             
