@@ -29,6 +29,10 @@ class MainViewModel(
         
         // Time to wait before auto-unlocking a stale track (milliseconds)
         private const val STALE_AUTO_UNLOCK_DELAY_MS = 10_000L  // 10 seconds
+        
+        // Battery thresholds
+        private const val LOW_BATTERY_THRESHOLD = 20
+        private const val CRITICAL_BATTERY_THRESHOLD = 10
     }
     
     // UI State
@@ -48,6 +52,10 @@ class MainViewModel(
     
     // Track when locked track became stale
     private var lockedTrackStaleTimestamp: Long? = null
+    
+    // Battery warning flags (to avoid spamming)
+    private var lowBatteryWarningShown = false
+    private var criticalBatteryWarningShown = false
     
     init {
         observeRadarData()
@@ -246,6 +254,11 @@ class MainViewModel(
                         droneState = if (isConnected) ConnectionState.Connected else ConnectionState.Disconnected
                     )
                 }
+                // Reset battery warnings when drone disconnects
+                if (!isConnected) {
+                    lowBatteryWarningShown = false
+                    criticalBatteryWarningShown = false
+                }
             }
         }
         
@@ -278,6 +291,30 @@ class MainViewModel(
             }
         }
         
+        // P2: Observe battery state
+        viewModelScope.launch {
+            droneRepository.batteryState.collect { battery ->
+                if (battery != null) {
+                    // Update UI state
+                    _uiState.update { state ->
+                        state.copy(
+                            droneBattery = DroneBatteryUi(
+                                percentage = battery.percentage,
+                                isLow = battery.isLow,
+                                isCritical = battery.isCritical,
+                                remainingFlightMinutes = battery.remainingFlightTime / 60
+                            )
+                        )
+                    }
+                    
+                    // Handle battery warnings
+                    handleBatteryWarnings(battery.percentage)
+                } else {
+                    _uiState.update { it.copy(droneBattery = null) }
+                }
+            }
+        }
+        
         // Observe tracking state
         viewModelScope.launch {
             droneRepository.trackingState.collect { trackingState ->
@@ -286,6 +323,32 @@ class MainViewModel(
                         isTrackingActive = trackingState == TrackingState.TRACKING
                     )
                 }
+            }
+        }
+    }
+    
+    /**
+     * P2: Handle battery warnings
+     */
+    private fun handleBatteryWarnings(batteryPercent: Int) {
+        when {
+            batteryPercent <= CRITICAL_BATTERY_THRESHOLD && !criticalBatteryWarningShown -> {
+                criticalBatteryWarningShown = true
+                Log.w(TAG, "Critical battery: $batteryPercent%")
+                _uiState.update { it.copy(toastMessage = "🪫 CRITICAL BATTERY ($batteryPercent%) - Auto-unlocking") }
+                
+                // Auto-unlock on critical battery
+                if (_uiState.value.lockedTrackId != null) {
+                    viewModelScope.launch {
+                        delay(1000) // Show warning first
+                        unlockTrack()
+                    }
+                }
+            }
+            batteryPercent <= LOW_BATTERY_THRESHOLD && !lowBatteryWarningShown -> {
+                lowBatteryWarningShown = true
+                Log.w(TAG, "Low battery: $batteryPercent%")
+                _uiState.update { it.copy(toastMessage = "🔋 Low battery ($batteryPercent%) - Consider landing soon") }
             }
         }
     }
@@ -387,6 +450,13 @@ class MainViewModel(
             // Don't allow locking stale tracks
             if (track.isStale) {
                 _uiState.update { it.copy(toastMessage = "Cannot lock stale track") }
+                return
+            }
+            
+            // Check battery before locking
+            val battery = _uiState.value.droneBattery
+            if (battery?.isCritical == true) {
+                _uiState.update { it.copy(toastMessage = "🪫 Cannot track - Battery critical") }
                 return
             }
             
