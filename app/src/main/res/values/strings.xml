@@ -4,34 +4,31 @@
     
     <!-- Main Screen -->
     <string name="settings">Settings</string>
-    <string name="fullscreen_map">Fullscreen map</string>
-    <string name="fullscreen_camera">Fullscreen camera</string>
-    <string name="exit_fullscreen">Exit fullscreen</string>
-    <string name="expand_pip">Expand picture-in-picture</string>
-    
-    <!-- View Modes -->
-    <string name="mode_map">🗺️ Map</string>
-    <string name="mode_camera">📹 Camera</string>
-    <string name="mode_split">⊞ Split</string>
+    <string name="collapse_top_bar">Collapse status bar</string>
+    <string name="expand_top_bar">Expand status bar</string>
+    <string name="show_camera">Show Camera</string>
+    <string name="show_map">Show Map</string>
+    <string name="swap_views">Swap views</string>
+    <string name="center_on_map">Center on Map</string>
     
     <!-- Status -->
-    <string name="status_radar_connected">🟢 Radar: Connected</string>
-    <string name="status_radar_disconnected">🔴 Radar: Disconnected</string>
-    <string name="status_radar_connecting">🟡 Radar: Connecting…</string>
-    <string name="status_radar_error">🔴 Radar: Error</string>
+    <string name="status_radar_connected">Radar Connected</string>
+    <string name="status_radar_disconnected">Radar Disconnected</string>
+    <string name="status_radar_connecting">Radar Connecting</string>
+    <string name="status_radar_error">Radar Error</string>
     
-    <string name="status_drone_connected">🟢 Drone: Connected</string>
-    <string name="status_drone_disconnected">🔴 Drone: Disconnected</string>
-    <string name="status_drone_connecting">🟡 Drone: Connecting…</string>
-    <string name="status_drone_error">🔴 Drone: Error</string>
+    <string name="status_drone_connected">Drone Connected</string>
+    <string name="status_drone_disconnected">Drone Disconnected</string>
+    <string name="status_drone_connecting">Drone Connecting</string>
+    <string name="status_drone_error">Drone Error</string>
     
-    <string name="status_camera_streaming">🟢 Camera: Streaming</string>
-    <string name="status_camera_off">🔴 Camera: Off</string>
-    <string name="status_camera_starting">🟡 Camera: Starting…</string>
-    <string name="status_camera_error">🔴 Camera: Error</string>
+    <string name="status_camera_streaming">Camera Streaming</string>
+    <string name="status_camera_off">Camera Off</string>
+    <string name="status_camera_starting">Camera Starting</string>
+    <string name="status_camera_error">Camera Error</string>
     
     <!-- Track Actions -->
-    <string name="track_locked">Locked: Track %1$s</string>
+    <string name="track_locked">Track %1$s</string>
     <string name="track_unlocked">Track unlocked</string>
     <string name="track_info">Show Info</string>
     <string name="track_lock">Lock</string>
@@ -54,11 +51,15 @@
     <string name="dialog_cancel">Cancel</string>
     
     <!-- Track Info -->
-    <string name="track_info_title">Track %1$s Info</string>
+    <string name="track_info_title">Track %1$s</string>
     <string name="track_info_position">Position</string>
     <string name="track_info_movement">Movement</string>
     <string name="track_info_radar_data">Radar Data</string>
     <string name="track_info_classification">Classification</string>
     <string name="track_info_status_active">Active</string>
     <string name="track_info_status_stale">STALE</string>
+    
+    <!-- PiP -->
+    <string name="pip_tap_to_swap">Tap to swap</string>
+    <string name="pip_double_tap_to_hide">Double tap to hide</string>
 </resources>
