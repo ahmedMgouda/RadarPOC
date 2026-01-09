@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/rootContainer"
@@ -8,216 +9,385 @@
     android:background="@android:color/black"
     tools:context=".MainActivity">
 
-    <!-- Status Bar -->
-    <LinearLayout
-        android:id="@+id/statusBar"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp"
-        android:background="@color/status_bar_bg"
-        android:gravity="center_vertical"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <TextView
-            android:id="@+id/radarStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="🔴 Radar: Disconnected"
-            android:textColor="@android:color/white"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/droneStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="🔴 Drone: Disconnected"
-            android:textColor="@android:color/white"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/cameraStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="🔴 Camera: Off"
-            android:textColor="@android:color/white"
-            android:textSize="12sp" />
-            
-        <ImageButton
-            android:id="@+id/settingsButton"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_preferences"
-            app:tint="@android:color/white"
-            android:contentDescription="@string/settings" />
-    </LinearLayout>
-
-    <!-- Content Container -->
+    <!-- Main Content (Map or Camera - Full Screen) -->
     <FrameLayout
-        android:id="@+id/contentContainer"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/statusBar"
-        app:layout_constraintBottom_toTopOf="@id/bottomToolbar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:id="@+id/mainContentContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
         <!-- Map Container -->
         <FrameLayout
             android:id="@+id/mapContainer"
             android:layout_width="match_parent"
             android:layout_height="match_parent">
-            
+
             <fragment
                 android:id="@+id/mapFragment"
                 android:name="com.google.android.gms.maps.SupportMapFragment"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
-            
-            <!-- Fullscreen button for Map -->
-            <ImageButton
-                android:id="@+id/btnMapFullscreen"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="top|end"
-                android:layout_margin="16dp"
-                android:background="@drawable/bg_fullscreen_button"
-                android:src="@drawable/ic_fullscreen"
-                android:padding="12dp"
-                app:tint="@android:color/white"
-                android:contentDescription="@string/fullscreen_map"
-                android:elevation="4dp" />
         </FrameLayout>
 
-        <!-- Camera Container (Full screen camera mode) -->
+        <!-- Camera Container (when camera is main view) -->
         <FrameLayout
             android:id="@+id/cameraContainer"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="gone">
-            
-            <!-- Camera feed will be added here programmatically -->
-            
-            <!-- Fullscreen button for Camera -->
-            <ImageButton
-                android:id="@+id/btnCameraFullscreen"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="top|end"
-                android:layout_margin="16dp"
-                android:background="@drawable/bg_fullscreen_button"
-                android:src="@drawable/ic_fullscreen"
-                android:padding="12dp"
-                app:tint="@android:color/white"
-                android:contentDescription="@string/fullscreen_camera"
-                android:elevation="4dp" />
-            
-            <!-- Locked Track Indicator for Camera Mode -->
-            <TextView
-                android:id="@+id/lockedTrackIndicator"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top|start"
-                android:layout_margin="16dp"
-                android:padding="8dp"
-                android:background="@drawable/bg_locked_indicator"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:visibility="gone"
-                tools:text="🔒 Locked: Track 357" />
-        </FrameLayout>
+            android:visibility="gone" />
 
-        <!-- PiP Camera Container (for split view) -->
-        <FrameLayout
-            android:id="@+id/pipCameraContainer"
-            android:layout_width="200dp"
-            android:layout_height="150dp"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="16dp"
-            android:background="@drawable/bg_pip_container"
-            android:visibility="gone"
-            android:elevation="8dp"
-            android:clickable="true"
-            android:focusable="true">
-            
-            <!-- PiP camera feed will be added here programmatically -->
-            
-            <!-- Expand PiP button -->
-            <ImageButton
-                android:id="@+id/btnExpandPip"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:layout_gravity="top|end"
-                android:layout_margin="4dp"
-                android:background="@drawable/bg_pip_button"
-                android:src="@drawable/ic_fullscreen"
-                android:padding="6dp"
-                app:tint="@android:color/white"
-                android:contentDescription="@string/expand_pip"
-                android:elevation="2dp" />
-        </FrameLayout>
     </FrameLayout>
 
-    <!-- Floating Exit Fullscreen Button (shown only in fullscreen mode) -->
-    <ImageButton
-        android:id="@+id/btnExitFullscreen"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+    <!-- PiP Window (Draggable) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/pipContainer"
+        android:layout_width="160dp"
+        android:layout_height="120dp"
         android:layout_margin="16dp"
-        android:background="@drawable/bg_exit_fullscreen_button"
-        android:src="@drawable/ic_fullscreen_exit"
-        android:padding="14dp"
-        app:tint="@android:color/white"
-        android:contentDescription="@string/exit_fullscreen"
+        android:layout_gravity="top|start"
         android:elevation="8dp"
         android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:cardCornerRadius="8dp"
+        app:cardBackgroundColor="@android:color/black">
 
-    <!-- Bottom Toolbar -->
+        <!-- PiP Content (Camera or Map) -->
+        <FrameLayout
+            android:id="@+id/pipContentContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- PiP Border Overlay -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_pip_border" />
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Top Bar (Collapsible, Transparent) -->
     <LinearLayout
-        android:id="@+id/bottomToolbar"
-        android:layout_width="0dp"
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_gravity="top"
         android:orientation="horizontal"
-        android:background="@color/toolbar_bg"
-        android:elevation="4dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:gravity="center_vertical"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="8dp"
+        android:background="@drawable/bg_top_bar_gradient">
 
-        <Button
-            android:id="@+id/btnMapMode"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="@string/mode_map"
-            android:textAllCaps="false"
-            style="?attr/borderlessButtonStyle" />
+        <!-- Collapse Button -->
+        <ImageButton
+            android:id="@+id/btnCollapseTopBar"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_icon_button"
+            android:src="@drawable/ic_chevron_up"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            app:tint="@android:color/white"
+            android:contentDescription="@string/collapse_top_bar" />
 
-        <Button
-            android:id="@+id/btnCameraMode"
+        <!-- Status Indicators -->
+        <LinearLayout
+            android:id="@+id/statusIndicators"
             android:layout_width="0dp"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/mode_camera"
-            android:textAllCaps="false"
-            style="?attr/borderlessButtonStyle" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp">
 
-        <Button
-            android:id="@+id/btnSplitMode"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="@string/mode_split"
-            android:textAllCaps="false"
-            style="?attr/borderlessButtonStyle" />
+            <!-- Radar Status Dot -->
+            <View
+                android:id="@+id/radarStatusDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:background="@drawable/bg_status_dot_disconnected" />
+
+            <!-- Drone Status Dot -->
+            <View
+                android:id="@+id/droneStatusDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_status_dot_disconnected" />
+
+            <!-- Camera Status Dot -->
+            <View
+                android:id="@+id/cameraStatusDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_status_dot_disconnected" />
+
+            <!-- Track Count -->
+            <TextView
+                android:id="@+id/trackCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                tools:text="5" />
+
+        </LinearLayout>
+
+        <!-- Settings Button -->
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_icon_button"
+            android:src="@drawable/ic_settings"
+            android:scaleType="centerInside"
+            android:padding="8dp"
+            app:tint="@android:color/white"
+            android:contentDescription="@string/settings" />
+
     </LinearLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <!-- Collapsed Top Bar Tab (shown when top bar is hidden) -->
+    <LinearLayout
+        android:id="@+id/topBarCollapsedTab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="4dp"
+        android:background="@drawable/bg_collapsed_tab"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_down"
+            app:tint="@android:color/white"
+            android:contentDescription="@string/expand_top_bar" />
+
+    </LinearLayout>
+
+    <!-- Bottom Floating Controls -->
+    <FrameLayout
+        android:id="@+id/bottomControlsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:padding="16dp">
+
+        <!-- Show PiP Button (left side, shown when PiP is hidden) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnShowPip"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="start|bottom"
+            android:minWidth="48dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:visibility="gone"
+            app:icon="@drawable/ic_camera"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:cornerRadius="20dp"
+            style="@style/Widget.Material3.Button.TonalButton"
+            tools:visibility="visible" />
+
+        <!-- Locked Track Chip (right side, shown when track is locked) -->
+        <com.google.android.material.chip.Chip
+            android:id="@+id/lockedTrackChip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|bottom"
+            android:visibility="gone"
+            app:chipIcon="@drawable/ic_lock"
+            app:closeIconVisible="true"
+            app:chipBackgroundColor="#CC000000"
+            android:textColor="@android:color/white"
+            tools:text="Track 357"
+            tools:visibility="visible" />
+
+    </FrameLayout>
+
+    <!-- Bottom Sheet for Track Info -->
+    <LinearLayout
+        android:id="@+id/trackInfoBottomSheet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_bottom_sheet"
+        android:padding="16dp"
+        android:elevation="16dp"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="80dp">
+
+        <!-- Drag Handle -->
+        <View
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/bg_drag_handle" />
+
+        <!-- Peek Content (always visible when sheet is shown) -->
+        <LinearLayout
+            android:id="@+id/trackInfoPeek"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="12dp">
+
+            <!-- Track Title -->
+            <TextView
+                android:id="@+id/trackInfoTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="Track 357" />
+
+            <!-- Lock Button -->
+            <ImageButton
+                android:id="@+id/btnLockTrack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_icon_button"
+                android:src="@drawable/ic_lock_open"
+                android:padding="8dp"
+                app:tint="@android:color/white"
+                android:contentDescription="@string/track_lock" />
+
+            <!-- Close Button -->
+            <ImageButton
+                android:id="@+id/btnCloseTrackInfo"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_icon_button"
+                android:src="@drawable/ic_close"
+                android:padding="8dp"
+                app:tint="@android:color/white"
+                android:contentDescription="@string/dialog_cancel" />
+
+        </LinearLayout>
+
+        <!-- Quick Info Row -->
+        <TextView
+            android:id="@+id/trackInfoQuick"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#B0FFFFFF"
+            android:textSize="13sp"
+            tools:text="📍 30.04°, 31.23°  📏 120m  💨 15m/s" />
+
+        <!-- Expanded Content (visible when pulled up) -->
+        <LinearLayout
+            android:id="@+id/trackInfoExpanded"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="16dp">
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#33FFFFFF" />
+
+            <!-- Position Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/track_info_position"
+                android:textColor="#80FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/trackInfoPosition"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                tools:text="30.044400°, 31.235700°" />
+
+            <!-- Movement Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/track_info_movement"
+                android:textColor="#80FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/trackInfoMovement"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                tools:text="Alt: 120m  Speed: 15m/s  Heading: 45°" />
+
+            <!-- Radar Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/track_info_radar_data"
+                android:textColor="#80FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/trackInfoRadar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                tools:text="Range: 1.2km  Azimuth: 32°" />
+
+            <!-- Classification Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/track_info_classification"
+                android:textColor="#80FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/trackInfoClassification"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                tools:text="Drone (85%)" />
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="16dp"
+                android:background="#33FFFFFF" />
+
+            <!-- Action Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCenterOnTrack"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="📍 Center on Map"
+                style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
