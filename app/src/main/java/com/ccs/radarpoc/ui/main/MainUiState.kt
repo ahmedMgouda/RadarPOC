@@ -1,11 +1,7 @@
 package com.ccs.radarpoc.ui.main
 
 import com.ccs.radarpoc.data.RadarTrack
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
+import com.ccs.radarpoc.util.GeoUtils
 
 /**
  * Represents which view is currently the main (full screen) view
@@ -54,16 +50,7 @@ data class TrackUiModel(
      * Calculate distance to this track from a given position
      */
     fun distanceFrom(lat: Double, lon: Double): Double {
-        val R = 6371000.0 // Earth radius in meters
-        val dLat = Math.toRadians(latitude - lat)
-        val dLon = Math.toRadians(longitude - lon)
-        
-        val a = sin(dLat / 2).pow(2.0) +
-                cos(Math.toRadians(lat)) * cos(Math.toRadians(latitude)) *
-                sin(dLon / 2).pow(2.0)
-        
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return R * c
+        return GeoUtils.distanceMeters(lat, lon, latitude, longitude)
     }
 }
 
@@ -75,6 +62,24 @@ data class DroneLocationUi(
     val longitude: Double,
     val altitude: Double
 )
+
+/**
+ * Represents drone battery state for UI
+ */
+data class DroneBatteryUi(
+    val percentage: Int,
+    val isLow: Boolean,
+    val isCritical: Boolean,
+    val remainingFlightMinutes: Int
+) {
+    val displayText: String get() = "$percentage%"
+    
+    val statusIcon: String get() = when {
+        isCritical -> "🪫"  // Empty battery
+        isLow -> "🔋"       // Low battery
+        else -> "🔋"        // Normal battery
+    }
+}
 
 /**
  * Main UI State - Single source of truth for the main screen
@@ -96,8 +101,9 @@ data class MainUiState(
     val lockedTrackStale: Boolean = false,  // P1: Track if locked track is stale
     val selectedTrackId: String? = null,
     
-    // Drone location
+    // Drone state
     val droneLocation: DroneLocationUi? = null,
+    val droneBattery: DroneBatteryUi? = null,
     
     // Tracking state
     val isTrackingActive: Boolean = false,
@@ -154,6 +160,12 @@ data class MainUiState(
      */
     val isActivelyTracking: Boolean
         get() = lockedTrackId != null && !lockedTrackStale && isTrackingActive
+    
+    /**
+     * Check if battery warning should be shown
+     */
+    val showBatteryWarning: Boolean
+        get() = droneBattery?.isLow == true || droneBattery?.isCritical == true
 }
 
 /**
