@@ -486,8 +486,9 @@ class MainActivity : AppCompatActivity() {
             // DISABLE built-in zoom controls (we use custom ones)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             
-            // Disable map rotation (keep north up for easier navigation)
-            setMapOrientation(0f)
+            // Map rotation will be configured in onResume via reloadMapConfiguration()
+            // Default: keep north-up initially
+            setMapOrientation(0f, false)
             
             // Enable hardware acceleration for smoother rendering
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -996,8 +997,8 @@ class MainActivity : AppCompatActivity() {
         // Re-enable immersive mode when returning to activity
         hideSystemUI()
         
-        // Reload map tiles in case settings changed
-        reloadMapTilesIfNeeded()
+        // Reload map configuration in case settings changed
+        reloadMapConfiguration()
     }
     
     override fun onPause() {
@@ -1022,11 +1023,25 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Reload map tiles if settings changed (e.g., new maps added)
+     * Reload map configuration when returning from settings
      */
-    private fun reloadMapTilesIfNeeded() {
-        // This will be called on resume to pick up any new map files
-        // For now, we just invalidate to refresh tiles
-        mapView?.invalidate()
+    private fun reloadMapConfiguration() {
+        mapView?.let { map ->
+            val appSettings = AppSettings(this)
+            
+            // Apply rotation setting
+            if (!appSettings.enableMapRotation) {
+                // Disable rotation - lock to north
+                map.setMapOrientation(0f, false)
+                android.util.Log.d(TAG, "Map rotation DISABLED - locked to North")
+            } else {
+                // Enable rotation - map can be rotated with two fingers
+                // No need to do anything special, setMultiTouchControls(true) handles it
+                android.util.Log.d(TAG, "Map rotation ENABLED - use two-finger gesture")
+            }
+            
+            // Refresh map
+            map.invalidate()
+        }
     }
 }

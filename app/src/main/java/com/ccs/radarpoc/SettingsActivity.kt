@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
@@ -20,12 +21,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import com.ccs.radarpoc.data.AppSettings
 import com.ccs.radarpoc.network.RadarApiClient
 import com.ccs.radarpoc.ui.MapFileAdapter
 import com.ccs.radarpoc.util.MapFileManager
 import com.ccs.radarpoc.util.MapTileProviderFactory
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.tabs.TabLayoutMediator
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.Dispatchers
@@ -40,13 +44,20 @@ class SettingsActivity : AppCompatActivity() {
         private const val KEY_IS_AUTHENTICATED = "is_authenticated"
     }
     
-    private lateinit var etRadarBaseUrl: EditText
-    private lateinit var etPollInterval: EditText
-    private lateinit var etStaleTimeout: EditText
-    private lateinit var etMissionUpdateInterval: EditText
-    private lateinit var btnTestConnection: Button
+    // Main views
+    private lateinit var tabLayout: TabLayout
+    private lateinit var viewPager: ViewPager2
     private lateinit var btnSave: Button
+    
+    // Radar settings views
+    private lateinit var etRadarBaseUrl: TextInputEditText
+    private lateinit var etPollInterval: TextInputEditText
+    private lateinit var etStaleTimeout: TextInputEditText
+    private lateinit var btnTestConnection: Button
     private lateinit var tvTestResult: TextView
+    
+    // Drone settings views
+    private lateinit var etMissionUpdateInterval: TextInputEditText
     
     // Map management views
     private lateinit var rvMapFiles: RecyclerView
@@ -75,11 +86,14 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var appSettings: AppSettings
     private lateinit var mapFileAdapter: MapFileAdapter
     
-    // Authentication state - preserved across orientation changes
+    // Authentication state
     private var isAuthenticated = false
     
     // Login dialog reference
     private var loginDialog: AlertDialog? = null
+    
+    // Tab layouts
+    private val tabLayouts = mutableListOf<View>()
     
     // File picker launcher
     private val filePickerLauncher = registerForActivityResult(
@@ -97,34 +111,27 @@ class SettingsActivity : AppCompatActivity() {
         
         appSettings = AppSettings(this)
         
-        // Restore authentication state from saved instance
+        // Restore authentication state
         isAuthenticated = savedInstanceState?.getBoolean(KEY_IS_AUTHENTICATED, false) ?: false
         
         if (isAuthenticated) {
-            // Already authenticated, show settings directly
             initializeSettingsScreen()
         } else {
-            // Show login dialog
             showLoginDialog()
         }
     }
     
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        // Save authentication state for orientation changes
         outState.putBoolean(KEY_IS_AUTHENTICATED, isAuthenticated)
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        // Dismiss dialog to prevent window leak
         loginDialog?.dismiss()
         loginDialog = null
     }
     
-    /**
-     * Show login dialog to authenticate user
-     */
     private fun showLoginDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_login, null)
         
@@ -134,17 +141,14 @@ class SettingsActivity : AppCompatActivity() {
         val etPassword = dialogView.findViewById<TextInputEditText>(R.id.etPassword)
         val tvError = dialogView.findViewById<TextView>(R.id.tvError)
         
-        // Function to perform login
         val performLogin = {
             val username = etUsername.text?.toString()?.trim() ?: ""
             val password = etPassword.text?.toString() ?: ""
             
-            // Clear previous errors
             tilUsername.error = null
             tilPassword.error = null
             tvError.visibility = View.GONE
             
-            // Validate input
             var hasError = false
             if (username.isEmpty()) {
                 tilUsername.error = "Username required"
@@ -156,7 +160,6 @@ class SettingsActivity : AppCompatActivity() {
             }
             
             if (!hasError) {
-                // Validate credentials
                 if (appSettings.validateCredentials(username, password)) {
                     isAuthenticated = true
                     loginDialog?.dismiss()
@@ -170,7 +173,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         
-        // Handle IME action on username field (Next -> move to password)
         etUsername.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_NEXT || 
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
@@ -181,7 +183,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         
-        // Handle IME action on password field (Done -> login)
         etPassword.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_DONE || 
                 (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
@@ -195,9 +196,9 @@ class SettingsActivity : AppCompatActivity() {
         loginDialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(false)
-            .setPositiveButton("Login", null) // Set to null, we'll override it
+            .setPositiveButton("Login", null)
             .setNegativeButton("Cancel") { _, _ ->
-                finish() // Close activity if user cancels
+                finish()
             }
             .create()
         
@@ -206,63 +207,140 @@ class SettingsActivity : AppCompatActivity() {
             loginButton?.setOnClickListener {
                 performLogin()
             }
-            
-            // Auto focus username field
             etUsername.requestFocus()
         }
         
         loginDialog?.show()
     }
     
-    /**
-     * Initialize the settings screen after successful authentication
-     */
     private fun initializeSettingsScreen() {
         setContentView(R.layout.activity_settings)
         
-        // Enable back button
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "Settings"
         
-        initViews()
+        initMainViews()
+        setupViewPager()
         loadSettings()
-        setupListeners()
     }
     
-    private fun initViews() {
-        etRadarBaseUrl = findViewById(R.id.etRadarBaseUrl)
-        etPollInterval = findViewById(R.id.etPollInterval)
-        etStaleTimeout = findViewById(R.id.etStaleTimeout)
-        etMissionUpdateInterval = findViewById(R.id.etMissionUpdateInterval)
-        btnTestConnection = findViewById(R.id.btnTestConnection)
+    private fun initMainViews() {
+        tabLayout = findViewById(R.id.tabLayout)
+        viewPager = findViewById(R.id.viewPager)
         btnSave = findViewById(R.id.btnSave)
-        tvTestResult = findViewById(R.id.tvTestResult)
         
-        // Map management views
-        rvMapFiles = findViewById(R.id.rvMapFiles)
-        tvEmptyMaps = findViewById(R.id.tvEmptyMaps)
-        btnAddMapFile = findViewById(R.id.btnAddMapFile)
-        btnMapInstructions = findViewById(R.id.btnMapInstructions)
-        tvCurrentMapSource = findViewById(R.id.tvCurrentMapSource)
+        btnSave.setOnClickListener {
+            saveSettings()
+        }
+    }
+    
+    private fun setupViewPager() {
+        // Create tab layouts with proper layout parameters for ViewPager2
+        val radarTab = layoutInflater.inflate(R.layout.tab_radar_settings, viewPager, false).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        val mapTab = layoutInflater.inflate(R.layout.tab_map_settings, viewPager, false).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        val droneTab = layoutInflater.inflate(R.layout.tab_drone_settings, viewPager, false).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        val securityTab = layoutInflater.inflate(R.layout.tab_security_settings, viewPager, false).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
         
-        // Map Display Switches
-        switchShowCompass = findViewById(R.id.switchShowCompass)
-        switchShowZoomButtons = findViewById(R.id.switchShowZoomButtons)
-        switchShowScaleBar = findViewById(R.id.switchShowScaleBar)
-        switchEnableMapRotation = findViewById(R.id.switchEnableMapRotation)
+        tabLayouts.clear()
+        tabLayouts.add(radarTab)
+        tabLayouts.add(mapTab)
+        tabLayouts.add(droneTab)
+        tabLayouts.add(securityTab)
         
-        // Security Settings Views
-        cardDefaultCredentialsWarning = findViewById(R.id.cardDefaultCredentialsWarning)
-        tvCurrentUsername = findViewById(R.id.tvCurrentUsername)
-        etNewUsername = findViewById(R.id.etNewUsername)
-        etNewPassword = findViewById(R.id.etNewPassword)
-        etConfirmPassword = findViewById(R.id.etConfirmPassword)
-        tilNewUsername = findViewById(R.id.tilNewUsername)
-        tilNewPassword = findViewById(R.id.tilNewPassword)
-        tilConfirmPassword = findViewById(R.id.tilConfirmPassword)
-        btnUpdateCredentials = findViewById(R.id.btnUpdateCredentials)
+        // Initialize views in each tab
+        initRadarTabViews(radarTab)
+        initMapTabViews(mapTab)
+        initDroneTabViews(droneTab)
+        initSecurityTabViews(securityTab)
+        
+        // Setup ViewPager adapter
+        viewPager.adapter = SettingsPagerAdapter(tabLayouts)
+        
+        // Setup TabLayout with ViewPager
+        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> "📡 Radar"
+                1 -> "🗺️ Map"
+                2 -> "🚁 Drone"
+                3 -> "🔐 Security"
+                else -> ""
+            }
+        }.attach()
+    }
+    
+    private fun initRadarTabViews(view: View) {
+        etRadarBaseUrl = view.findViewById(R.id.etRadarBaseUrl)
+        etPollInterval = view.findViewById(R.id.etPollInterval)
+        etStaleTimeout = view.findViewById(R.id.etStaleTimeout)
+        btnTestConnection = view.findViewById(R.id.btnTestConnection)
+        tvTestResult = view.findViewById(R.id.tvTestResult)
+        
+        btnTestConnection.setOnClickListener {
+            testConnection()
+        }
+    }
+    
+    private fun initMapTabViews(view: View) {
+        rvMapFiles = view.findViewById(R.id.rvMapFiles)
+        tvEmptyMaps = view.findViewById(R.id.tvEmptyMaps)
+        btnAddMapFile = view.findViewById(R.id.btnAddMapFile)
+        btnMapInstructions = view.findViewById(R.id.btnMapInstructions)
+        tvCurrentMapSource = view.findViewById(R.id.tvCurrentMapSource)
+        
+        switchShowCompass = view.findViewById(R.id.switchShowCompass)
+        switchShowZoomButtons = view.findViewById(R.id.switchShowZoomButtons)
+        switchShowScaleBar = view.findViewById(R.id.switchShowScaleBar)
+        switchEnableMapRotation = view.findViewById(R.id.switchEnableMapRotation)
+        
+        btnAddMapFile.setOnClickListener {
+            openFilePicker()
+        }
+        
+        btnMapInstructions.setOnClickListener {
+            showInstructions()
+        }
         
         setupMapFilesRecyclerView()
+    }
+    
+    private fun initDroneTabViews(view: View) {
+        etMissionUpdateInterval = view.findViewById(R.id.etMissionUpdateInterval)
+    }
+    
+    private fun initSecurityTabViews(view: View) {
+        cardDefaultCredentialsWarning = view.findViewById(R.id.cardDefaultCredentialsWarning)
+        tvCurrentUsername = view.findViewById(R.id.tvCurrentUsername)
+        etNewUsername = view.findViewById(R.id.etNewUsername)
+        etNewPassword = view.findViewById(R.id.etNewPassword)
+        etConfirmPassword = view.findViewById(R.id.etConfirmPassword)
+        tilNewUsername = view.findViewById(R.id.tilNewUsername)
+        tilNewPassword = view.findViewById(R.id.tilNewPassword)
+        tilConfirmPassword = view.findViewById(R.id.tilConfirmPassword)
+        btnUpdateCredentials = view.findViewById(R.id.btnUpdateCredentials)
+        
+        btnUpdateCredentials.setOnClickListener {
+            updateCredentials()
+        }
     }
     
     private fun loadSettings() {
@@ -282,69 +360,38 @@ class SettingsActivity : AppCompatActivity() {
         
         // Security settings
         updateSecurityUI()
+        
+        // Load map files
+        loadMapFiles()
     }
     
-    /**
-     * Update security section UI
-     */
     private fun updateSecurityUI() {
-        // Show current username
         tvCurrentUsername.text = appSettings.authUsername
         
-        // Show warning if using default credentials
         if (appSettings.isUsingDefaultCredentials()) {
             cardDefaultCredentialsWarning.visibility = View.VISIBLE
         } else {
             cardDefaultCredentialsWarning.visibility = View.GONE
         }
         
-        // Clear input fields
         etNewUsername.text?.clear()
         etNewPassword.text?.clear()
         etConfirmPassword.text?.clear()
         
-        // Clear errors
         tilNewUsername.error = null
         tilNewPassword.error = null
         tilConfirmPassword.error = null
     }
     
-    private fun setupListeners() {
-        btnSave.setOnClickListener {
-            saveSettings()
-        }
-        
-        btnTestConnection.setOnClickListener {
-            testConnection()
-        }
-        
-        btnAddMapFile.setOnClickListener {
-            openFilePicker()
-        }
-        
-        btnMapInstructions.setOnClickListener {
-            showInstructions()
-        }
-        
-        btnUpdateCredentials.setOnClickListener {
-            updateCredentials()
-        }
-    }
-    
-    /**
-     * Update user credentials
-     */
     private fun updateCredentials() {
         val newUsername = etNewUsername.text?.toString()?.trim() ?: ""
         val newPassword = etNewPassword.text?.toString() ?: ""
         val confirmPassword = etConfirmPassword.text?.toString() ?: ""
         
-        // Clear previous errors
         tilNewUsername.error = null
         tilNewPassword.error = null
         tilConfirmPassword.error = null
         
-        // Validate input
         var hasError = false
         
         if (newUsername.isEmpty()) {
@@ -373,7 +420,6 @@ class SettingsActivity : AppCompatActivity() {
         
         if (hasError) return
         
-        // Show confirmation dialog
         AlertDialog.Builder(this)
             .setTitle("Update Credentials")
             .setMessage("Are you sure you want to update your login credentials?\n\nNew username: $newUsername")
@@ -389,9 +435,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
     
-    /**
-     * Setup RecyclerView for map files
-     */
     private fun setupMapFilesRecyclerView() {
         mapFileAdapter = MapFileAdapter(
             onMapSelected = { mapFile ->
@@ -406,18 +449,12 @@ class SettingsActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@SettingsActivity)
             adapter = mapFileAdapter
         }
-        
-        loadMapFiles()
     }
     
-    /**
-     * Load and display available map files
-     */
     private fun loadMapFiles() {
         lifecycleScope.launch {
             val mapFiles = MapFileManager.scanForMapFiles(this@SettingsActivity)
             
-            // Read metadata for each file
             val mapFilesWithInfo = mapFiles.map { mapFile ->
                 val info = withContext(Dispatchers.IO) {
                     MapTileProviderFactory.readMBTilesInfo(File(mapFile.path))
@@ -438,9 +475,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Update current map source display - shows summary of ALL loaded maps
-     */
     private fun updateCurrentMapSourceDisplay(mapFilesWithInfo: List<Pair<MapFileManager.MapFile, MapTileProviderFactory.MBTilesInfo?>>) {
         if (mapFilesWithInfo.isEmpty()) {
             tvCurrentMapSource.text = "No offline maps (using online tiles)"
@@ -454,7 +488,6 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         
-        // Calculate combined stats
         val totalSize = mapFilesWithInfo.sumOf { it.first.sizeBytes }
         val totalSizeMB = totalSize / (1024.0 * 1024.0)
         val minZoom = loadedInfos.minOfOrNull { it.minZoom } ?: 0
@@ -467,9 +500,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Open file picker to select map file
-     */
     private fun openFilePicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -479,25 +509,15 @@ class SettingsActivity : AppCompatActivity() {
         filePickerLauncher.launch(intent)
     }
     
-    /**
-     * Handle selected file from picker with detailed logging
-     */
     private fun handleSelectedFile(uri: Uri) {
         lifecycleScope.launch {
             try {
-                // Show progress
                 Toast.makeText(this@SettingsActivity, "Importing map file...", Toast.LENGTH_SHORT).show()
                 
                 val result = withContext(Dispatchers.IO) {
-                    // Get file name from URI
                     val fileName = getFileName(uri) ?: "map.mbtiles"
-                    android.util.Log.d("SettingsActivity", "Selected file: $fileName from URI: $uri")
-                    
-                    // Create temporary file
                     val tempFile = File(cacheDir, fileName)
-                    android.util.Log.d("SettingsActivity", "Temp file path: ${tempFile.absolutePath}")
                     
-                    // Copy from URI to temp file
                     var bytesCopied = 0L
                     contentResolver.openInputStream(uri)?.use { input ->
                         FileOutputStream(tempFile).use { output ->
@@ -505,44 +525,20 @@ class SettingsActivity : AppCompatActivity() {
                         }
                     }
                     
-                    android.util.Log.d("SettingsActivity", "Copied $bytesCopied bytes to temp file")
-                    android.util.Log.d("SettingsActivity", "Temp file size: ${tempFile.length()} bytes, exists: ${tempFile.exists()}")
-                    
-                    // Validate file
                     if (!MapFileManager.isValidMapFile(tempFile)) {
-                        val errorMsg = "Invalid map file format.\n" +
-                                      "File: $fileName\n" +
-                                      "Size: ${tempFile.length()} bytes\n" +
-                                      "Extension: ${tempFile.extension}\n" +
-                                      "Supported: .mbtiles, .sqlite, .db"
-                        android.util.Log.e("SettingsActivity", errorMsg)
                         tempFile.delete()
                         return@withContext Result.failure<MapFileManager.MapFile>(
-                            Exception(errorMsg)
+                            Exception("Invalid map file format")
                         )
                     }
                     
-                    // Read and validate MBTiles metadata
-                    val mbtilesInfo = MapTileProviderFactory.readMBTilesInfo(tempFile)
-                    if (mbtilesInfo == null) {
-                        android.util.Log.w("SettingsActivity", "Could not read MBTiles metadata, but file may still be valid")
-                    } else {
-                        android.util.Log.d("SettingsActivity", "MBTiles info: zoom ${mbtilesInfo.minZoom}-${mbtilesInfo.maxZoom}, format: ${mbtilesInfo.format}")
-                    }
-                    
-                    android.util.Log.d("SettingsActivity", "File validation passed, importing...")
-                    
-                    // Import file
                     val importResult = MapFileManager.importMapFile(this@SettingsActivity, tempFile)
-                    
-                    // Clean up temp file
                     tempFile.delete()
                     
                     importResult
                 }
                 
                 result.onSuccess { mapFile ->
-                    // Read metadata for the imported file
                     val info = withContext(Dispatchers.IO) {
                         MapTileProviderFactory.readMBTilesInfo(File(mapFile.path))
                     }
@@ -568,19 +564,15 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 
             } catch (e: Exception) {
-                android.util.Log.e("SettingsActivity", "Exception during import", e)
                 Toast.makeText(
                     this@SettingsActivity, 
-                    "Error: ${e.javaClass.simpleName}\n${e.message}", 
+                    "Error: ${e.message}", 
                     Toast.LENGTH_LONG
                 ).show()
             }
         }
     }
     
-    /**
-     * Get file name from URI
-     */
     private fun getFileName(uri: Uri): String? {
         var fileName: String? = null
         contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -592,9 +584,6 @@ class SettingsActivity : AppCompatActivity() {
         return fileName
     }
     
-    /**
-     * Show detailed info about a map file
-     */
     private fun showMapFileInfo(mapFile: MapFileManager.MapFile) {
         lifecycleScope.launch {
             val info = withContext(Dispatchers.IO) {
@@ -620,12 +609,6 @@ class SettingsActivity : AppCompatActivity() {
                 } else {
                     append("(Metadata not available)\n")
                 }
-                
-                append("\n")
-                append("─────────────────\n")
-                append("Note: All map files are automatically\n")
-                append("combined. Different zoom levels from\n")
-                append("different files work together seamlessly.")
             }
             
             AlertDialog.Builder(this@SettingsActivity)
@@ -639,9 +622,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Confirm before deleting map file
-     */
     private fun confirmDeleteMapFile(mapFile: MapFileManager.MapFile) {
         AlertDialog.Builder(this)
             .setTitle("Delete Map File")
@@ -653,9 +633,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
     
-    /**
-     * Delete map file
-     */
     private fun deleteMapFile(mapFile: MapFileManager.MapFile) {
         val success = MapFileManager.deleteMapFile(mapFile)
         if (success) {
@@ -666,9 +643,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Show instructions dialog
-     */
     private fun showInstructions() {
         val instructions = """
             📍 OFFLINE MAPS SETUP
@@ -690,15 +664,8 @@ class SettingsActivity : AppCompatActivity() {
             TIPS:
             ─────────────────────
             
-            • Create separate files for different zoom ranges:
-              - File 1: Zoom 8-12 (overview)
-              - File 2: Zoom 13-16 (detail)
-              - File 3: Zoom 17-19 (high detail)
-            
+            • Create separate files for different zoom ranges
             • All files are combined automatically
-            
-            • Tiles are searched in order - first match wins
-            
             • No internet needed once maps are loaded
             
             ─────────────────────
@@ -706,7 +673,6 @@ class SettingsActivity : AppCompatActivity() {
             ─────────────────────
             • MBTiles (.mbtiles) ✓ Recommended
             • SQLite (.sqlite, .db)
-            • GEMF (.gemf)
         """.trimIndent()
         
         AlertDialog.Builder(this)
@@ -724,21 +690,25 @@ class SettingsActivity : AppCompatActivity() {
         
         if (baseUrl.isEmpty()) {
             Toast.makeText(this, "Please enter a valid radar base URL", Toast.LENGTH_SHORT).show()
+            viewPager.currentItem = 0 // Switch to Radar tab
             return
         }
         
         if (pollInterval < 1) {
             Toast.makeText(this, "Poll interval must be at least 1 second", Toast.LENGTH_SHORT).show()
+            viewPager.currentItem = 0
             return
         }
         
         if (staleTimeout < 1) {
             Toast.makeText(this, "Stale timeout must be at least 1 second", Toast.LENGTH_SHORT).show()
+            viewPager.currentItem = 0
             return
         }
         
         if (missionUpdateInterval < 1) {
             Toast.makeText(this, "Mission update interval must be at least 1 second", Toast.LENGTH_SHORT).show()
+            viewPager.currentItem = 2 // Switch to Drone tab
             return
         }
         
@@ -747,13 +717,12 @@ class SettingsActivity : AppCompatActivity() {
         appSettings.staleTimeout = staleTimeout
         appSettings.missionUpdateInterval = missionUpdateInterval
         
-        // Save map display settings
         appSettings.showCompass = switchShowCompass.isChecked
         appSettings.showZoomButtons = switchShowZoomButtons.isChecked
         appSettings.showScaleBar = switchShowScaleBar.isChecked
         appSettings.enableMapRotation = switchEnableMapRotation.isChecked
         
-        Toast.makeText(this, "Settings saved successfully", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "✓ Settings saved successfully", Toast.LENGTH_SHORT).show()
         finish()
     }
     
@@ -794,11 +763,30 @@ class SettingsActivity : AppCompatActivity() {
     
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // Allow back press only if authenticated
         if (isAuthenticated) {
             super.onBackPressed()
         } else {
             finish()
         }
+    }
+    
+    // ViewPager Adapter
+    private class SettingsPagerAdapter(
+        private val layouts: List<View>
+    ) : androidx.recyclerview.widget.RecyclerView.Adapter<SettingsPagerAdapter.ViewHolder>() {
+        
+        class ViewHolder(val view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view)
+        
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
+            return ViewHolder(layouts[viewType])
+        }
+        
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            // Views are already inflated and bound
+        }
+        
+        override fun getItemCount(): Int = layouts.size
+        
+        override fun getItemViewType(position: Int): Int = position
     }
 }
