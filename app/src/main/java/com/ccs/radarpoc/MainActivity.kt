@@ -4,19 +4,25 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
+import android.os.Build
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.Animation
-import android.view.animation.RotateAnimation
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.GestureDetectorCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -43,6 +49,7 @@ import kotlin.math.sqrt
 /**
  * Main Activity - Material Design 3 UI with draggable PiP
  * Using OSMDroid for full offline map support with multiple MBTiles files
+ * Runs in immersive fullscreen mode for maximum map visibility
  */
 class MainActivity : AppCompatActivity() {
     
@@ -96,8 +103,18 @@ class MainActivity : AppCompatActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Enable edge-to-edge display
+        enableEdgeToEdge()
+        
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        
+        // Apply system bars insets to avoid UI overlap
+        applySystemBarsInsets()
+        
+        // Enable immersive fullscreen mode
+        hideSystemUI()
         
         setupBottomSheet()
         setupPipGestures()
@@ -108,6 +125,76 @@ class MainActivity : AppCompatActivity() {
         observeState()
         observeNavigation()
         observeCenterOnTrack()
+    }
+    
+    /**
+     * Enable edge-to-edge display (draw behind system bars)
+     */
+    private fun enableEdgeToEdge() {
+        // Make the app draw behind system bars
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        // Make system bars transparent
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+    }
+    
+    /**
+     * Apply insets so UI elements don't overlap with system bars when they're visible
+     */
+    private fun applySystemBarsInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            // Apply padding to top bar so it doesn't overlap with status bar
+            binding.topBar.setPadding(
+                binding.topBar.paddingLeft,
+                insets.top + 8,
+                binding.topBar.paddingRight,
+                binding.topBar.paddingBottom
+            )
+            
+            // Apply margin to map controls so they don't overlap with navigation bar
+            val mapControlsParams = binding.mapControlsContainer.layoutParams as ViewGroup.MarginLayoutParams
+            mapControlsParams.rightMargin = insets.right + 12
+            binding.mapControlsContainer.layoutParams = mapControlsParams
+            
+            // Apply padding to bottom controls
+            binding.bottomControlsContainer.setPadding(
+                insets.left + 16,
+                binding.bottomControlsContainer.paddingTop,
+                insets.right + 16,
+                insets.bottom + 16
+            )
+            
+            windowInsets
+        }
+    }
+    
+    /**
+     * Hide system UI (status bar and navigation bar) for immersive fullscreen
+     */
+    private fun hideSystemUI() {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        
+        windowInsetsController.apply {
+            // Hide both the status bar and the navigation bar
+            hide(WindowInsetsCompat.Type.systemBars())
+            
+            // Behavior: show bars with swipe gesture, auto-hide after delay
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        
+        // Keep screen on while app is active
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+    
+    /**
+     * Show system UI temporarily
+     */
+    private fun showSystemUI() {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
     }
     
     /**
@@ -350,7 +437,6 @@ class MainActivity : AppCompatActivity() {
                         maxZoomLevel = maxZoom.toDouble()
                         
                         android.util.Log.d(TAG, "✓ Auto-detected zoom limits: $minZoom-$maxZoom")
-                        android.util.Log.d(TAG, "  This prevents zooming beyond available tiles")
                     }
                     
                     // Show summary toast
@@ -392,7 +478,6 @@ class MainActivity : AppCompatActivity() {
             setMultiTouchControls(true)
             
             // Set default zoom levels (will be overridden by auto-detect if offline maps loaded)
-            // These are only used when no offline maps are available
             if (mapFiles.isEmpty()) {
                 minZoomLevel = 3.0
                 maxZoomLevel = 22.0
@@ -416,7 +501,7 @@ class MainActivity : AppCompatActivity() {
                 setCentred(false)
                 setAlignBottom(true)
                 setAlignRight(false)
-                setScaleBarOffset(50, 50)
+                setScaleBarOffset(50, 80)  // Offset from edge
             }
             overlays.add(scaleBarOverlay)
             
@@ -615,17 +700,6 @@ class MainActivity : AppCompatActivity() {
         updateBottomSheet(state)
         handleToast(state.toastMessage)
         handleError(state.errorMessage)
-        
-        // Update compass rotation if rotation is enabled
-        val settings = AppSettings(this)
-        if (settings.enableMapRotation) {
-            mapView?.let { map ->
-                val orientation = map.mapOrientation
-                if (orientation != currentCompassRotation) {
-                    updateCompassRotation(orientation)
-                }
-            }
-        }
     }
     
     /**
@@ -919,8 +993,8 @@ class MainActivity : AppCompatActivity() {
         mapView?.onResume() // OSMDroid lifecycle
         viewModel.startRadarPolling()
         
-        // Apply map display settings
-        applyMapDisplaySettings()
+        // Re-enable immersive mode when returning to activity
+        hideSystemUI()
         
         // Reload map tiles in case settings changed
         reloadMapTilesIfNeeded()
@@ -939,88 +1013,12 @@ class MainActivity : AppCompatActivity() {
         TrackMarkerHelper.clearCache()
     }
     
-    /**
-     * Apply map display settings from preferences
-     */
-    private fun applyMapDisplaySettings() {
-        val settings = AppSettings(this)
-        
-        mapView?.let { map ->
-            // Apply compass visibility
-            binding.btnCompass.visibility = 
-                if (settings.showCompass) View.VISIBLE else View.GONE
-            
-            // Apply zoom buttons visibility
-            val zoomButtonsVisible = if (settings.showZoomButtons) View.VISIBLE else View.GONE
-            binding.btnZoomIn.visibility = zoomButtonsVisible
-            binding.btnZoomOut.visibility = zoomButtonsVisible
-            
-            // Apply scale bar visibility
-            scaleBarOverlay?.isEnabled = settings.showScaleBar
-            
-            // Apply map rotation setting
-            if (settings.enableMapRotation) {
-                // Enable rotation with gestures - use rotation gesture overlay
-                map.setMultiTouchControls(true)
-                // Enable rotation gestures (two-finger twist)
-                org.osmdroid.views.overlay.gestures.RotationGestureOverlay(map).also {
-                    it.isEnabled = true
-                    // Remove old rotation overlay if exists
-                    map.overlays.removeAll { overlay -> 
-                        overlay is org.osmdroid.views.overlay.gestures.RotationGestureOverlay 
-                    }
-                    map.overlays.add(it)
-                }
-                
-                // Add map listener to update compass rotation
-                map.addMapListener(object : org.osmdroid.events.MapListener {
-                    override fun onScroll(event: org.osmdroid.events.ScrollEvent?): Boolean {
-                        return true
-                    }
-                    
-                    override fun onZoom(event: org.osmdroid.events.ZoomEvent?): Boolean {
-                        return true
-                    }
-                })
-                
-                // Add map orientation listener to rotate compass
-                map.post {
-                    updateCompassRotation(map.mapOrientation)
-                }
-                
-                // Update compass button appearance - make it interactive
-                binding.btnCompass.alpha = 1.0f
-                binding.btnCompass.isEnabled = true
-            } else {
-                // Disable rotation - keep North-up
-                map.mapOrientation = 0f
-                // Remove rotation gesture overlay
-                map.overlays.removeAll { overlay -> 
-                    overlay is org.osmdroid.views.overlay.gestures.RotationGestureOverlay 
-                }
-                // Keep multi-touch for zoom
-                map.setMultiTouchControls(true)
-                
-                // Reset compass rotation
-                binding.btnCompass.rotation = 0f
-                currentCompassRotation = 0f
-                
-                // Make compass static (grayed out)
-                binding.btnCompass.alpha = 0.5f
-                binding.btnCompass.isEnabled = false
-            }
-            
-            map.invalidate()
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            // Re-enable immersive mode when window gains focus
+            hideSystemUI()
         }
-    }
-    
-    /**
-     * Update compass icon rotation to match map orientation
-     */
-    private fun updateCompassRotation(mapOrientation: Float) {
-        // Rotate compass icon to match map orientation
-        binding.btnCompass.rotation = mapOrientation
-        currentCompassRotation = mapOrientation
     }
     
     /**
