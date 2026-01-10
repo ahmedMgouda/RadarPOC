@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -76,6 +77,12 @@ class MainActivity : AppCompatActivity() {
         MainViewModelFactory(AppSettings(this))
     }
     
+    // Track List Drawer
+    private lateinit var drawerLayout: androidx.drawerlayout.widget.DrawerLayout
+    private lateinit var trackListAdapter: com.ccs.radarpoc.ui.TrackListAdapter
+    private lateinit var tvDrawerTrackCount: TextView
+    private lateinit var llEmptyState: View
+    
     // OSMDroid MapView
     private var mapView: MapView? = null
     private val trackMarkers = mutableMapOf<String, Marker>()
@@ -122,11 +129,60 @@ class MainActivity : AppCompatActivity() {
         setupPipGestures()
         setupClickListeners()
         setupMapControls()
+        setupTrackListDrawer()
         setupOSMDroid()
         setupDroneCamera()
         observeState()
         observeNavigation()
         observeCenterOnTrack()
+    }
+    
+    /**
+     * Setup track list drawer
+     */
+    private fun setupTrackListDrawer() {
+        drawerLayout = binding.drawerLayout
+        
+        // Find drawer views
+        val rvTrackList = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvTrackList)
+        tvDrawerTrackCount = findViewById(R.id.tvDrawerTrackCount)
+        llEmptyState = findViewById(R.id.llEmptyState)
+        val switchHideStale = findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.switchHideStale)
+        
+        // Setup hide stale toggle
+        val appSettings = AppSettings(this)
+        switchHideStale.isChecked = appSettings.hideStaleTracks
+        switchHideStale.setOnCheckedChangeListener { _, isChecked ->
+            appSettings.hideStaleTracks = isChecked
+            // Refresh drawer list
+            updateTrackListDrawer(viewModel.uiState.value)
+        }
+        
+        // Setup adapter with click handler
+        trackListAdapter = com.ccs.radarpoc.ui.TrackListAdapter { track ->
+            // Close drawer
+            drawerLayout.closeDrawers()
+            
+            // Center map on track with zoom and smooth animation
+            mapView?.controller?.animateTo(
+                GeoPoint(track.latitude, track.longitude),
+                18.0,  // Zoom level
+                1000L  // Animation duration
+            )
+            
+            // Select track and show bottom sheet
+            viewModel.onEvent(MainUiEvent.TrackSelected(track.id))
+            showTrackBottomSheet()
+        }
+        
+        // Setup RecyclerView
+        rvTrackList.adapter = trackListAdapter
+        rvTrackList.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        
+        // Track count click opens drawer
+        binding.trackCountContainer.setOnClickListener {
+            drawerLayout.openDrawer(androidx.core.view.GravityCompat.START)
+        }
     }
     
     /**
@@ -699,9 +755,56 @@ class MainActivity : AppCompatActivity() {
         updateMapControlsVisibility(state)
         updateDroneMarker(state.droneLocation)
         updateMapMarkers(state.tracks, state.lockedTrackId)
+        updateTrackListDrawer(state)
         updateBottomSheet(state)
         handleToast(state.toastMessage)
         handleError(state.errorMessage)
+    }
+    
+    /**
+     * Update track list drawer content
+     */
+    private fun updateTrackListDrawer(state: MainUiState) {
+        // Filter out stale tracks if toggle is enabled
+        val appSettings = AppSettings(this)
+        val filteredTracks = if (appSettings.hideStaleTracks) {
+            state.tracks.filter { !it.isStale }
+        } else {
+            state.tracks
+        }
+        
+        // Update track count in drawer header (show filtered count)
+        tvDrawerTrackCount.text = filteredTracks.size.toString()
+        
+        // Show/hide empty state
+        if (filteredTracks.isEmpty()) {
+            llEmptyState.visibility = View.VISIBLE
+            findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvTrackList).visibility = View.GONE
+        } else {
+            llEmptyState.visibility = View.GONE
+            findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvTrackList).visibility = View.VISIBLE
+        }
+        
+        // Prepare track list items with distance calculation
+        val items = filteredTracks.map { track ->
+            val distance = state.droneLocation?.let { drone ->
+                track.distanceFrom(drone.latitude, drone.longitude).let { d ->
+                    when {
+                        d < 1000 -> "${d.toInt()}m"
+                        else -> String.format("%.1fkm", d / 1000)
+                    }
+                }
+            } ?: "—"
+            
+            com.ccs.radarpoc.ui.TrackListAdapter.TrackListItem(
+                track = track,
+                distance = distance,
+                isLocked = track.id == state.lockedTrackId
+            )
+        }
+        
+        // Update adapter
+        trackListAdapter.submitList(items)
     }
     
     /**
@@ -869,6 +972,8 @@ class MainActivity : AppCompatActivity() {
      */
     private fun updateMapMarkers(tracks: List<TrackUiModel>, lockedTrackId: String?) {
         mapView?.let { map ->
+            val selectedTrackId = viewModel.uiState.value.selectedTrackId
+            
             // Remove markers for tracks that no longer exist
             val currentTrackIds = tracks.map { it.id }.toSet()
             val markersToRemove = trackMarkers.keys.filter { it !in currentTrackIds }
@@ -881,22 +986,36 @@ class MainActivity : AppCompatActivity() {
             tracks.forEach { trackUi ->
                 val position = GeoPoint(trackUi.latitude, trackUi.longitude)
                 val isLocked = trackUi.id == lockedTrackId
+                val isSelected = trackUi.id == selectedTrackId
                 
                 val marker = trackMarkers[trackUi.id]
                 if (marker != null) {
                     // Update existing marker
                     marker.position = position
-                    marker.title = trackUi.displayTitle
-                    // Update icon based on lock/stale state
-                    marker.icon = createTrackMarkerIcon(trackUi.id, trackUi.isStale, isLocked)
+                    marker.title = "T-${trackUi.id}" // OSMDroid will show this as label below marker
+                    
+                    // Update icon based on lock/stale/selected state
+                    marker.icon = createTrackMarkerIcon(trackUi.id, trackUi.isStale, isLocked, isSelected)
                 } else {
                     // Create new marker
                     val newMarker = Marker(map).apply {
                         this.position = position
-                        title = trackUi.displayTitle
+                        title = "T-${trackUi.id}" // OSMDroid will show this as label below marker
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        icon = createTrackMarkerIcon(trackUi.id, trackUi.isStale, isLocked)
+                        icon = createTrackMarkerIcon(trackUi.id, trackUi.isStale, isLocked, isSelected)
                         id = trackUi.id
+                        
+                        // DISABLE OSMDroid's default info window/bubble (so it doesn't pop up on click)
+                        // But keep the title label visible below marker
+                        infoWindow = null
+                        
+                        // Add click listener to show bottom sheet
+                        setOnMarkerClickListener { clickedMarker, _ ->
+                            // Show bottom sheet with track details
+                            viewModel.onEvent(MainUiEvent.TrackSelected(clickedMarker.id))
+                            showTrackBottomSheet()
+                            true // Consume the event
+                        }
                     }
                     map.overlays.add(newMarker)
                     trackMarkers[trackUi.id] = newMarker
@@ -910,13 +1029,24 @@ class MainActivity : AppCompatActivity() {
     /**
      * Create marker icon for track
      */
-    private fun createTrackMarkerIcon(trackId: String, isStale: Boolean, isLocked: Boolean): BitmapDrawable {
+    private fun createTrackMarkerIcon(trackId: String, isStale: Boolean, isLocked: Boolean, isSelected: Boolean = false): BitmapDrawable {
+        // Get marker size from settings
+        val appSettings = AppSettings(this)
+        var sizeMultiplier = appSettings.trackMarkerSize
+        
+        // Highlight selected marker by making it slightly larger
+        if (isSelected) {
+            sizeMultiplier *= 1.3f // 30% larger when selected
+        }
+        
         // Use existing TrackMarkerHelper which creates bitmaps
         return TrackMarkerHelper.createSquareMarker(
             context = this,
             trackId = trackId,
             isStale = isStale,
-            isLocked = isLocked
+            isLocked = isLocked,
+            sizeMultiplier = sizeMultiplier,
+            isSelected = isSelected
         ) as BitmapDrawable
     }
     

@@ -61,15 +61,19 @@ object TrackMarkerHelper {
      * @param trackId The track ID (used to determine color)
      * @param isStale Whether the track is stale (will be black)
      * @param isLocked Whether the track is locked (will have white border)
+     * @param sizeMultiplier Size multiplier (default 1.0 = 32px, 2.0 = 64px, etc.)
+     * @param isSelected Whether the marker is currently selected (will have glowing border)
      */
     fun createSquareMarker(
         context: Context,
         trackId: String,
         isStale: Boolean = false,
-        isLocked: Boolean = false
+        isLocked: Boolean = false,
+        sizeMultiplier: Float = 1.0f,
+        isSelected: Boolean = false
     ): BitmapDrawable {
-        // Create cache key
-        val cacheKey = "${trackId}_${isStale}_${isLocked}"
+        // Create cache key including size multiplier and selection state
+        val cacheKey = "${trackId}_${isStale}_${isLocked}_${sizeMultiplier}_${isSelected}"
         
         // Return cached version if available
         markerCache[cacheKey]?.let { return it }
@@ -77,8 +81,30 @@ object TrackMarkerHelper {
         // Determine fill color
         val fillColor = if (isStale) STALE_COLOR else getColorForTrack(trackId)
         
-        // Create bitmap
-        val bitmap = Bitmap.createBitmap(MARKER_SIZE, MARKER_SIZE, Bitmap.Config.ARGB_8888)
+        // Calculate actual marker size based on multiplier
+        val actualSize = (MARKER_SIZE * sizeMultiplier).toInt()
+        val actualBorderWidth = BORDER_WIDTH * sizeMultiplier
+        
+        // Calculate text size and total height (marker + text)
+        val textSize = (12f * sizeMultiplier)
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            this.textSize = textSize
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+            style = Paint.Style.FILL
+            setShadowLayer(2f * sizeMultiplier, 0f, 0f, Color.BLACK) // Text shadow for readability
+        }
+        
+        val textBounds = android.graphics.Rect()
+        val trackLabel = "T-$trackId"
+        textPaint.getTextBounds(trackLabel, 0, trackLabel.length, textBounds)
+        val textHeight = textBounds.height()
+        val textPadding = (4 * sizeMultiplier).toInt()
+        
+        // Create bitmap with extra space for text below marker
+        val totalHeight = actualSize + textPadding + textHeight + textPadding
+        val bitmap = Bitmap.createBitmap(actualSize, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         
         // Draw fill
@@ -87,23 +113,45 @@ object TrackMarkerHelper {
             style = Paint.Style.FILL
             isAntiAlias = true
         }
-        canvas.drawRect(0f, 0f, MARKER_SIZE.toFloat(), MARKER_SIZE.toFloat(), fillPaint)
+        canvas.drawRect(0f, 0f, actualSize.toFloat(), actualSize.toFloat(), fillPaint)
         
-        // Draw border
+        // Draw border (locked or normal)
         val borderPaint = Paint().apply {
             color = if (isLocked) LOCKED_BORDER_COLOR else Color.parseColor("#80FFFFFF")
             style = Paint.Style.STROKE
-            strokeWidth = if (isLocked) BORDER_WIDTH * 2 else BORDER_WIDTH
+            strokeWidth = if (isLocked) actualBorderWidth * 2 else actualBorderWidth
             isAntiAlias = true
         }
         val halfBorder = borderPaint.strokeWidth / 2
         canvas.drawRect(
             halfBorder, 
             halfBorder, 
-            MARKER_SIZE - halfBorder, 
-            MARKER_SIZE - halfBorder, 
+            actualSize - halfBorder, 
+            actualSize - halfBorder, 
             borderPaint
         )
+        
+        // Draw selection highlight (glowing cyan border)
+        if (isSelected) {
+            val selectionPaint = Paint().apply {
+                color = Color.parseColor("#00E5FF") // Bright cyan
+                style = Paint.Style.STROKE
+                strokeWidth = actualBorderWidth * 3 // Thicker border
+                isAntiAlias = true
+            }
+            val selectionHalfBorder = selectionPaint.strokeWidth / 2
+            canvas.drawRect(
+                selectionHalfBorder,
+                selectionHalfBorder,
+                actualSize - selectionHalfBorder,
+                actualSize - selectionHalfBorder,
+                selectionPaint
+            )
+        }
+        
+        // Draw track ID text below marker
+        val textY = actualSize + textPadding + textHeight
+        canvas.drawText(trackLabel, actualSize / 2f, textY.toFloat(), textPaint)
         
         // Create drawable and cache it (OSMDroid compatible)
         val drawable = BitmapDrawable(context.resources, bitmap)

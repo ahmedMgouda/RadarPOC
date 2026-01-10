@@ -79,6 +79,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchShowZoomButtons: com.google.android.material.switchmaterial.SwitchMaterial
     private lateinit var switchShowScaleBar: com.google.android.material.switchmaterial.SwitchMaterial
     private lateinit var switchEnableMapRotation: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var sliderMarkerSize: com.google.android.material.slider.Slider
+    private lateinit var tvMarkerSizeLabel: android.widget.TextView
     
     // Security Settings Views
     private lateinit var cardDefaultCredentialsWarning: MaterialCardView
@@ -331,6 +333,13 @@ class SettingsActivity : AppCompatActivity() {
         switchShowZoomButtons = view.findViewById(R.id.switchShowZoomButtons)
         switchShowScaleBar = view.findViewById(R.id.switchShowScaleBar)
         switchEnableMapRotation = view.findViewById(R.id.switchEnableMapRotation)
+        sliderMarkerSize = view.findViewById(R.id.sliderMarkerSize)
+        tvMarkerSizeLabel = view.findViewById(R.id.tvMarkerSizeLabel)
+        
+        // Setup marker size slider listener
+        sliderMarkerSize.addOnChangeListener { _, value, _ ->
+            updateMarkerSizeLabel(value)
+        }
         
         btnAddMapFile.setOnClickListener {
             openFilePicker()
@@ -363,6 +372,17 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
+    private fun updateMarkerSizeLabel(size: Float) {
+        tvMarkerSizeLabel.text = when (size) {
+            1.0f -> "Small (1.0x)"
+            1.5f -> "Medium (1.5x)"
+            2.0f -> "Large (2.0x)"
+            2.5f -> "X-Large (2.5x)"
+            3.0f -> "XX-Large (3.0x)"
+            else -> String.format("%.1fx", size)
+        }
+    }
+    
     private fun loadSettings() {
         // Radar settings
         etRadarBaseUrl.setText(appSettings.radarBaseUrl)
@@ -383,6 +403,8 @@ class SettingsActivity : AppCompatActivity() {
         switchShowZoomButtons.isChecked = appSettings.showZoomButtons
         switchShowScaleBar.isChecked = appSettings.showScaleBar
         switchEnableMapRotation.isChecked = appSettings.enableMapRotation
+        sliderMarkerSize.value = appSettings.trackMarkerSize
+        updateMarkerSizeLabel(appSettings.trackMarkerSize)
         
         // Security settings
         updateSecurityUI()
@@ -763,6 +785,7 @@ class SettingsActivity : AppCompatActivity() {
         appSettings.showZoomButtons = switchShowZoomButtons.isChecked
         appSettings.showScaleBar = switchShowScaleBar.isChecked
         appSettings.enableMapRotation = switchEnableMapRotation.isChecked
+        appSettings.trackMarkerSize = sliderMarkerSize.value
         
         Toast.makeText(this, "✓ Settings saved successfully", Toast.LENGTH_SHORT).show()
         finish()

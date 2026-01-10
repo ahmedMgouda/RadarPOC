@@ -25,6 +25,11 @@ class AppSettings(context: Context) {
         private const val KEY_SHOW_ZOOM_BUTTONS = "show_zoom_buttons"
         private const val KEY_SHOW_SCALE_BAR = "show_scale_bar"
         private const val KEY_ENABLE_MAP_ROTATION = "enable_map_rotation"
+        private const val KEY_TRACK_MARKER_SIZE = "track_marker_size"
+        
+        // Stale Track Settings
+        private const val KEY_HIDE_STALE_TRACKS = "hide_stale_tracks"
+        private const val KEY_STALE_REMOVAL_TIMEOUT = "stale_removal_timeout"
         
         // FOV Display Settings
         private const val KEY_FOV_POLL_INTERVAL = "fov_poll_interval"
@@ -48,6 +53,11 @@ class AppSettings(context: Context) {
         const val DEFAULT_SHOW_ZOOM_BUTTONS = true
         const val DEFAULT_SHOW_SCALE_BAR = true
         const val DEFAULT_ENABLE_MAP_ROTATION = false // Professional radar standard
+        const val DEFAULT_TRACK_MARKER_SIZE = 2.0f // 2x for better visibility
+        
+        // Stale Track Defaults
+        const val DEFAULT_HIDE_STALE_TRACKS = false
+        const val DEFAULT_STALE_REMOVAL_TIMEOUT = 60 // seconds (1 minute)
         
         // FOV Display Defaults
         const val DEFAULT_FOV_POLL_INTERVAL = 30 // seconds (FOV doesn't change often)
@@ -119,6 +129,33 @@ class AppSettings(context: Context) {
     var enableMapRotation: Boolean
         get() = prefs.getBoolean(KEY_ENABLE_MAP_ROTATION, DEFAULT_ENABLE_MAP_ROTATION)
         set(value) = prefs.edit().putBoolean(KEY_ENABLE_MAP_ROTATION, value).apply()
+    
+    /**
+     * Track marker size multiplier (1.0 = normal, 2.0 = double size, etc.)
+     * Default is 2.0 for better visibility
+     */
+    var trackMarkerSize: Float
+        get() = prefs.getFloat(KEY_TRACK_MARKER_SIZE, DEFAULT_TRACK_MARKER_SIZE)
+        set(value) = prefs.edit().putFloat(KEY_TRACK_MARKER_SIZE, value).apply()
+    
+    // ========================================
+    // Stale Track Settings
+    // ========================================
+    
+    /**
+     * Hide stale tracks from map and drawer
+     */
+    var hideStaleTracks: Boolean
+        get() = prefs.getBoolean(KEY_HIDE_STALE_TRACKS, DEFAULT_HIDE_STALE_TRACKS)
+        set(value) = prefs.edit().putBoolean(KEY_HIDE_STALE_TRACKS, value).apply()
+    
+    /**
+     * Auto-remove stale tracks after this many seconds
+     * 0 = never remove, default = 60 seconds (1 minute)
+     */
+    var staleRemovalTimeout: Int
+        get() = prefs.getInt(KEY_STALE_REMOVAL_TIMEOUT, DEFAULT_STALE_REMOVAL_TIMEOUT)
+        set(value) = prefs.edit().putInt(KEY_STALE_REMOVAL_TIMEOUT, value).apply()
     
     // ========================================
     // FOV Display Settings
