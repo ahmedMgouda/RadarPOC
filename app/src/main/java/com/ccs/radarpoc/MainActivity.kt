@@ -4,14 +4,11 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
-import android.os.Build
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -34,6 +31,9 @@ import com.ccs.radarpoc.util.MapFileManager
 import com.ccs.radarpoc.util.MapTileProviderFactory
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
@@ -41,6 +41,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.ScaleBarOverlay
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.pow
@@ -82,6 +83,7 @@ class MainActivity : AppCompatActivity() {
     
     // Map overlays
     private var scaleBarOverlay: ScaleBarOverlay? = null
+    private var rotationGestureOverlay: RotationGestureOverlay? = null
     
     // Current compass rotation for animation
     private var currentCompassRotation = 0f
@@ -486,9 +488,8 @@ class MainActivity : AppCompatActivity() {
             // DISABLE built-in zoom controls (we use custom ones)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             
-            // Map rotation will be configured in onResume via reloadMapConfiguration()
             // Default: keep north-up initially
-            setMapOrientation(0f, false)
+            setMapOrientation(0f)
             
             // Enable hardware acceleration for smoother rendering
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -997,8 +998,8 @@ class MainActivity : AppCompatActivity() {
         // Re-enable immersive mode when returning to activity
         hideSystemUI()
         
-        // Reload map configuration in case settings changed
-        reloadMapConfiguration()
+        // Apply map settings (rotation, compass, scale bar, zoom buttons)
+        applyMapSettings()
     }
     
     override fun onPause() {
@@ -1023,25 +1024,94 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Reload map configuration when returning from settings
+     * Apply map display settings from preferences
      */
-    private fun reloadMapConfiguration() {
+    private fun applyMapSettings() {
+        val settings = AppSettings(this)
+        
         mapView?.let { map ->
-            val appSettings = AppSettings(this)
+            // ========================================
+            // COMPASS VISIBILITY
+            // ========================================
+            binding.btnCompass.visibility = 
+                if (settings.showCompass) View.VISIBLE else View.GONE
             
-            // Apply rotation setting
-            if (!appSettings.enableMapRotation) {
-                // Disable rotation - lock to north
-                map.setMapOrientation(0f, false)
-                android.util.Log.d(TAG, "Map rotation DISABLED - locked to North")
+            // ========================================
+            // ZOOM BUTTONS VISIBILITY
+            // ========================================
+            val zoomButtonsVisible = if (settings.showZoomButtons) View.VISIBLE else View.GONE
+            binding.btnZoomIn.visibility = zoomButtonsVisible
+            binding.btnZoomOut.visibility = zoomButtonsVisible
+            
+            // ========================================
+            // SCALE BAR VISIBILITY
+            // ========================================
+            scaleBarOverlay?.isEnabled = settings.showScaleBar
+            
+            // ========================================
+            // MAP ROTATION
+            // ========================================
+            if (settings.enableMapRotation) {
+                // Enable rotation with RotationGestureOverlay
+                if (rotationGestureOverlay == null) {
+                    rotationGestureOverlay = RotationGestureOverlay(map).apply {
+                        isEnabled = true
+                    }
+                    map.overlays.add(rotationGestureOverlay)
+                    android.util.Log.d(TAG, "✓ Map rotation ENABLED - use two-finger twist gesture")
+                }
+                rotationGestureOverlay?.isEnabled = true
+                
+                // Add listener to update compass icon rotation
+                map.addMapListener(object : MapListener {
+                    override fun onScroll(event: ScrollEvent?): Boolean {
+                        // Update compass rotation when map scrolls
+                        updateCompassRotation(map.mapOrientation)
+                        return true
+                    }
+                    
+                    override fun onZoom(event: ZoomEvent?): Boolean {
+                        return true
+                    }
+                })
+                
+                // Make compass button interactive
+                binding.btnCompass.alpha = 1.0f
+                binding.btnCompass.isEnabled = true
             } else {
-                // Enable rotation - map can be rotated with two fingers
-                // No need to do anything special, setMultiTouchControls(true) handles it
-                android.util.Log.d(TAG, "Map rotation ENABLED - use two-finger gesture")
+                // Disable rotation - remove overlay and reset to north
+                rotationGestureOverlay?.let { overlay ->
+                    overlay.isEnabled = false
+                    map.overlays.remove(overlay)
+                }
+                rotationGestureOverlay = null
+                
+                // Reset map to north
+                map.mapOrientation = 0f
+                binding.btnCompass.rotation = 0f
+                currentCompassRotation = 0f
+                
+                // Make compass static (grayed out)
+                binding.btnCompass.alpha = 0.5f
+                binding.btnCompass.isEnabled = false
+                
+                android.util.Log.d(TAG, "✗ Map rotation DISABLED - locked to North")
             }
             
             // Refresh map
             map.invalidate()
+        }
+    }
+    
+    /**
+     * Update compass icon rotation to match map orientation
+     */
+    private fun updateCompassRotation(mapOrientation: Float) {
+        if (mapOrientation != currentCompassRotation) {
+            // Rotate compass icon opposite to map rotation
+            // so it always points north
+            binding.btnCompass.rotation = -mapOrientation
+            currentCompassRotation = mapOrientation
         }
     }
 }
