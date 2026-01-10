@@ -21,6 +21,7 @@ import com.ccs.radarpoc.data.AppSettings
 import com.ccs.radarpoc.network.RadarApiClient
 import com.ccs.radarpoc.ui.MapFileAdapter
 import com.ccs.radarpoc.util.MapFileManager
+import com.ccs.radarpoc.util.MapTileProviderFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -123,7 +124,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun setupMapFilesRecyclerView() {
         mapFileAdapter = MapFileAdapter(
             onMapSelected = { mapFile ->
-                selectMapFile(mapFile)
+                showMapFileInfo(mapFile)
             },
             onMapDeleted = { mapFile ->
                 confirmDeleteMapFile(mapFile)
@@ -142,33 +143,56 @@ class SettingsActivity : AppCompatActivity() {
      * Load and display available map files
      */
     private fun loadMapFiles() {
-        val activeMapPath = appSettings.activeMapFilePath
-        val mapFiles = MapFileManager.scanForMapFiles(this).map { mapFile ->
-            mapFile.copy(isActive = mapFile.path == activeMapPath)
+        lifecycleScope.launch {
+            val mapFiles = MapFileManager.scanForMapFiles(this@SettingsActivity)
+            
+            // Read metadata for each file
+            val mapFilesWithInfo = mapFiles.map { mapFile ->
+                val info = withContext(Dispatchers.IO) {
+                    MapTileProviderFactory.readMBTilesInfo(File(mapFile.path))
+                }
+                Pair(mapFile, info)
+            }
+            
+            if (mapFiles.isEmpty()) {
+                rvMapFiles.visibility = View.GONE
+                tvEmptyMaps.visibility = View.VISIBLE
+            } else {
+                rvMapFiles.visibility = View.VISIBLE
+                tvEmptyMaps.visibility = View.GONE
+                mapFileAdapter.submitList(mapFiles)
+            }
+            
+            updateCurrentMapSourceDisplay(mapFilesWithInfo)
         }
-        
-        if (mapFiles.isEmpty()) {
-            rvMapFiles.visibility = View.GONE
-            tvEmptyMaps.visibility = View.VISIBLE
-        } else {
-            rvMapFiles.visibility = View.VISIBLE
-            tvEmptyMaps.visibility = View.GONE
-            mapFileAdapter.submitList(mapFiles)
-        }
-        
-        updateCurrentMapSourceDisplay()
     }
     
     /**
-     * Update current map source display
+     * Update current map source display - shows summary of ALL loaded maps
      */
-    private fun updateCurrentMapSourceDisplay() {
-        val activeMapPath = appSettings.activeMapFilePath
-        tvCurrentMapSource.text = if (activeMapPath != null) {
-            val file = File(activeMapPath)
-            file.nameWithoutExtension
-        } else {
-            "Default (Online Tiles)"
+    private fun updateCurrentMapSourceDisplay(mapFilesWithInfo: List<Pair<MapFileManager.MapFile, MapTileProviderFactory.MBTilesInfo?>>) {
+        if (mapFilesWithInfo.isEmpty()) {
+            tvCurrentMapSource.text = "No offline maps (using online tiles)"
+            return
+        }
+        
+        val loadedInfos = mapFilesWithInfo.mapNotNull { it.second }
+        
+        if (loadedInfos.isEmpty()) {
+            tvCurrentMapSource.text = "${mapFilesWithInfo.size} file(s) - metadata unavailable"
+            return
+        }
+        
+        // Calculate combined stats
+        val totalSize = mapFilesWithInfo.sumOf { it.first.sizeBytes }
+        val totalSizeMB = totalSize / (1024.0 * 1024.0)
+        val minZoom = loadedInfos.minOfOrNull { it.minZoom } ?: 0
+        val maxZoom = loadedInfos.maxOfOrNull { it.maxZoom } ?: 0
+        
+        tvCurrentMapSource.text = buildString {
+            append("${mapFilesWithInfo.size} file(s)")
+            append(" • ${String.format("%.1f", totalSizeMB)} MB")
+            append(" • Zoom $minZoom-$maxZoom")
         }
     }
     
@@ -227,6 +251,14 @@ class SettingsActivity : AppCompatActivity() {
                         )
                     }
                     
+                    // Read and validate MBTiles metadata
+                    val mbtilesInfo = MapTileProviderFactory.readMBTilesInfo(tempFile)
+                    if (mbtilesInfo == null) {
+                        android.util.Log.w("SettingsActivity", "Could not read MBTiles metadata, but file may still be valid")
+                    } else {
+                        android.util.Log.d("SettingsActivity", "MBTiles info: zoom ${mbtilesInfo.minZoom}-${mbtilesInfo.maxZoom}, format: ${mbtilesInfo.format}")
+                    }
+                    
                     android.util.Log.d("SettingsActivity", "File validation passed, importing...")
                     
                     // Import file
@@ -239,9 +271,20 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 
                 result.onSuccess { mapFile ->
+                    // Read metadata for the imported file
+                    val info = withContext(Dispatchers.IO) {
+                        MapTileProviderFactory.readMBTilesInfo(File(mapFile.path))
+                    }
+                    
+                    val infoText = if (info != null) {
+                        "Zoom: ${info.minZoom}-${info.maxZoom}"
+                    } else {
+                        mapFile.sizeFormatted
+                    }
+                    
                     Toast.makeText(
                         this@SettingsActivity, 
-                        "✓ Map imported: ${mapFile.displayName}\n${mapFile.sizeFormatted}", 
+                        "✓ Map imported: ${mapFile.displayName}\n$infoText", 
                         Toast.LENGTH_LONG
                     ).show()
                     loadMapFiles()
@@ -279,19 +322,50 @@ class SettingsActivity : AppCompatActivity() {
     }
     
     /**
-     * Select a map file as active
+     * Show detailed info about a map file
      */
-    private fun selectMapFile(mapFile: MapFileManager.MapFile) {
-        if (mapFile.isActive) {
-            // Deselect (use default online tiles)
-            appSettings.activeMapFilePath = null
-            Toast.makeText(this, "Switched to default online tiles", Toast.LENGTH_SHORT).show()
-        } else {
-            // Select this map
-            appSettings.activeMapFilePath = mapFile.path
-            Toast.makeText(this, "Selected: ${mapFile.displayName}", Toast.LENGTH_SHORT).show()
+    private fun showMapFileInfo(mapFile: MapFileManager.MapFile) {
+        lifecycleScope.launch {
+            val info = withContext(Dispatchers.IO) {
+                MapTileProviderFactory.readMBTilesInfo(File(mapFile.path))
+            }
+            
+            val message = buildString {
+                append("File: ${mapFile.name}\n")
+                append("Size: ${mapFile.formattedSize}\n")
+                append("\n")
+                
+                if (info != null) {
+                    append("─────────────────\n")
+                    append("MBTiles Metadata:\n")
+                    append("─────────────────\n")
+                    append("Name: ${info.name}\n")
+                    append("Format: ${info.format.uppercase()}\n")
+                    append("Zoom Levels: ${info.minZoom} - ${info.maxZoom}\n")
+                    append("Tile Scheme: ${info.scheme.uppercase()}\n")
+                    if (info.bounds != null) {
+                        append("Bounds: ${info.bounds}\n")
+                    }
+                } else {
+                    append("(Metadata not available)\n")
+                }
+                
+                append("\n")
+                append("─────────────────\n")
+                append("Note: All map files are automatically\n")
+                append("combined. Different zoom levels from\n")
+                append("different files work together seamlessly.")
+            }
+            
+            AlertDialog.Builder(this@SettingsActivity)
+                .setTitle("Map File Info")
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .setNegativeButton("Delete") { _, _ ->
+                    confirmDeleteMapFile(mapFile)
+                }
+                .show()
         }
-        loadMapFiles()
     }
     
     /**
@@ -312,11 +386,6 @@ class SettingsActivity : AppCompatActivity() {
      * Delete map file
      */
     private fun deleteMapFile(mapFile: MapFileManager.MapFile) {
-        // If this is the active map, deactivate it first
-        if (mapFile.isActive) {
-            appSettings.activeMapFilePath = null
-        }
-        
         val success = MapFileManager.deleteMapFile(mapFile)
         if (success) {
             Toast.makeText(this, "Map file deleted", Toast.LENGTH_SHORT).show()
@@ -330,9 +399,48 @@ class SettingsActivity : AppCompatActivity() {
      * Show instructions dialog
      */
     private fun showInstructions() {
+        val instructions = """
+            📍 OFFLINE MAPS SETUP
+            
+            All imported map files are automatically combined. You can add multiple files with different zoom levels for the same area.
+            
+            ─────────────────────
+            HOW TO CREATE MAPS:
+            ─────────────────────
+            
+            1. Download Mobile Atlas Creator (MOBAC)
+            2. Select "Google Satellite" or other source
+            3. Choose your area and zoom levels
+            4. Select "MBTiles SQLite" as atlas format
+            5. Create atlas and copy .mbtiles file to phone
+            6. Import here using "Add Map File"
+            
+            ─────────────────────
+            TIPS:
+            ─────────────────────
+            
+            • Create separate files for different zoom ranges:
+              - File 1: Zoom 8-12 (overview)
+              - File 2: Zoom 13-16 (detail)
+              - File 3: Zoom 17-19 (high detail)
+            
+            • All files are combined automatically
+            
+            • Tiles are searched in order - first match wins
+            
+            • No internet needed once maps are loaded
+            
+            ─────────────────────
+            SUPPORTED FORMATS:
+            ─────────────────────
+            • MBTiles (.mbtiles) ✓ Recommended
+            • SQLite (.sqlite, .db)
+            • GEMF (.gemf)
+        """.trimIndent()
+        
         AlertDialog.Builder(this)
-            .setTitle("Offline Maps Instructions")
-            .setMessage(MapFileManager.getInstructions(this))
+            .setTitle("Offline Maps Help")
+            .setMessage(instructions)
             .setPositiveButton("OK", null)
             .show()
     }
