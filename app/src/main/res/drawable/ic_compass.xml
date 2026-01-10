@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    
+    <!-- Compass needle - North (red) -->
+    <path
+        android:fillColor="#F44336"
+        android:pathData="M12,2L12,2L16,12L12,10L12,2Z"/>
+    
+    <!-- Compass needle - South (gray) -->
+    <path
+        android:fillColor="#757575"
+        android:pathData="M12,22L12,22L8,12L12,14L12,22Z"/>
+    
+    <!-- N letter -->
+    <path
+        android:fillColor="#F44336"
+        android:pathData="M12,3.5L12,3.5"
+        android:strokeWidth="0"/>
+        
+</vector>
