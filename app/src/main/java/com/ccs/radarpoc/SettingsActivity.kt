@@ -5,9 +5,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -33,6 +35,10 @@ import java.io.File
 import java.io.FileOutputStream
 
 class SettingsActivity : AppCompatActivity() {
+    
+    companion object {
+        private const val KEY_IS_AUTHENTICATED = "is_authenticated"
+    }
     
     private lateinit var etRadarBaseUrl: EditText
     private lateinit var etPollInterval: EditText
@@ -69,8 +75,11 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var appSettings: AppSettings
     private lateinit var mapFileAdapter: MapFileAdapter
     
-    // Authentication state
+    // Authentication state - preserved across orientation changes
     private var isAuthenticated = false
+    
+    // Login dialog reference
+    private var loginDialog: AlertDialog? = null
     
     // File picker launcher
     private val filePickerLauncher = registerForActivityResult(
@@ -88,8 +97,29 @@ class SettingsActivity : AppCompatActivity() {
         
         appSettings = AppSettings(this)
         
-        // Show login dialog before showing settings
-        showLoginDialog()
+        // Restore authentication state from saved instance
+        isAuthenticated = savedInstanceState?.getBoolean(KEY_IS_AUTHENTICATED, false) ?: false
+        
+        if (isAuthenticated) {
+            // Already authenticated, show settings directly
+            initializeSettingsScreen()
+        } else {
+            // Show login dialog
+            showLoginDialog()
+        }
+    }
+    
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Save authentication state for orientation changes
+        outState.putBoolean(KEY_IS_AUTHENTICATED, isAuthenticated)
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Dismiss dialog to prevent window leak
+        loginDialog?.dismiss()
+        loginDialog = null
     }
     
     /**
@@ -104,43 +134,33 @@ class SettingsActivity : AppCompatActivity() {
         val etPassword = dialogView.findViewById<TextInputEditText>(R.id.etPassword)
         val tvError = dialogView.findViewById<TextView>(R.id.tvError)
         
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setCancelable(false)
-            .setPositiveButton("Login", null) // Set to null, we'll override it
-            .setNegativeButton("Cancel") { _, _ ->
-                finish() // Close activity if user cancels
+        // Function to perform login
+        val performLogin = {
+            val username = etUsername.text?.toString()?.trim() ?: ""
+            val password = etPassword.text?.toString() ?: ""
+            
+            // Clear previous errors
+            tilUsername.error = null
+            tilPassword.error = null
+            tvError.visibility = View.GONE
+            
+            // Validate input
+            var hasError = false
+            if (username.isEmpty()) {
+                tilUsername.error = "Username required"
+                hasError = true
             }
-            .create()
-        
-        dialog.setOnShowListener {
-            val loginButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            loginButton.setOnClickListener {
-                val username = etUsername.text?.toString()?.trim() ?: ""
-                val password = etPassword.text?.toString() ?: ""
-                
-                // Clear previous errors
-                tilUsername.error = null
-                tilPassword.error = null
-                tvError.visibility = View.GONE
-                
-                // Validate input
-                var hasError = false
-                if (username.isEmpty()) {
-                    tilUsername.error = "Username required"
-                    hasError = true
-                }
-                if (password.isEmpty()) {
-                    tilPassword.error = "Password required"
-                    hasError = true
-                }
-                
-                if (hasError) return@setOnClickListener
-                
+            if (password.isEmpty()) {
+                tilPassword.error = "Password required"
+                hasError = true
+            }
+            
+            if (!hasError) {
                 // Validate credentials
                 if (appSettings.validateCredentials(username, password)) {
                     isAuthenticated = true
-                    dialog.dismiss()
+                    loginDialog?.dismiss()
+                    loginDialog = null
                     initializeSettingsScreen()
                 } else {
                     tvError.text = "Invalid username or password"
@@ -150,7 +170,48 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         
-        dialog.show()
+        // Handle IME action on username field (Next -> move to password)
+        etUsername.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_NEXT || 
+                (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                etPassword.requestFocus()
+                true
+            } else {
+                false
+            }
+        }
+        
+        // Handle IME action on password field (Done -> login)
+        etPassword.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_DONE || 
+                (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                performLogin()
+                true
+            } else {
+                false
+            }
+        }
+        
+        loginDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .setPositiveButton("Login", null) // Set to null, we'll override it
+            .setNegativeButton("Cancel") { _, _ ->
+                finish() // Close activity if user cancels
+            }
+            .create()
+        
+        loginDialog?.setOnShowListener {
+            val loginButton = loginDialog?.getButton(AlertDialog.BUTTON_POSITIVE)
+            loginButton?.setOnClickListener {
+                performLogin()
+            }
+            
+            // Auto focus username field
+            etUsername.requestFocus()
+        }
+        
+        loginDialog?.show()
     }
     
     /**
@@ -731,6 +792,7 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
     
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         // Allow back press only if authenticated
         if (isAuthenticated) {
