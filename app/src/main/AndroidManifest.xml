@@ -55,11 +55,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Settings Activity -->
+        <!-- Settings Activity - Handle orientation changes -->
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="Settings"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.RadarPOC" />
 
         <!-- Fix for Autel SDK UsbStartActivity -->
