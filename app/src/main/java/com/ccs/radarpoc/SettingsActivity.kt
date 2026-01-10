@@ -544,16 +544,15 @@ class SettingsActivity : AppCompatActivity() {
                     val fileName = getFileName(uri) ?: "map.mbtiles"
                     val tempFile = File(cacheDir, fileName)
                     
-                    var bytesCopied = 0L
                     contentResolver.openInputStream(uri)?.use { input ->
                         FileOutputStream(tempFile).use { output ->
-                            bytesCopied = input.copyTo(output)
+                            input.copyTo(output)
                         }
                     }
                     
                     if (!MapFileManager.isValidMapFile(tempFile)) {
                         tempFile.delete()
-                        return@withContext Result.failure<MapFileManager.MapFile>(
+                        return@withContext kotlin.Result.failure<MapFileManager.MapFile>(
                             Exception("Invalid map file format")
                         )
                     }
@@ -809,22 +808,30 @@ class SettingsActivity : AppCompatActivity() {
         val fovRepository = RadarFOVRepository(baseUrl)
         
         lifecycleScope.launch {
-            val (success, message) = fovRepository.testConnection()
+            val (connectionSuccess, message) = fovRepository.testConnection()
             
-            if (success) {
+            if (connectionSuccess) {
                 // Also try to parse the data
                 val fetchResult = fovRepository.fetchFOVData(forceRefresh = true)
-                fetchResult.onSuccess { data ->
-                    tvFovTestResult.text = buildString {
-                        append("✓ Connected\n")
-                        append("Radars found: ${data.radarCount}\n")
-                        data.radars.forEach { radar ->
-                            append("• ${radar.name}\n")
+                
+                if (fetchResult.isSuccess) {
+                    val data = fetchResult.getOrNull()
+                    if (data != null) {
+                        tvFovTestResult.text = buildString {
+                            append("✓ Connected\n")
+                            append("Radars found: ${data.radarCount}\n")
+                            data.radars.forEach { radar ->
+                                append("• ${radar.name}\n")
+                            }
                         }
+                        tvFovTestResult.setBackgroundColor(0xFF4CAF50.toInt())
+                    } else {
+                        tvFovTestResult.text = "✓ Connected but no data"
+                        tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
                     }
-                    tvFovTestResult.setBackgroundColor(0xFF4CAF50.toInt())
-                }.onFailure { error ->
-                    tvFovTestResult.text = "✓ Connected but parsing failed:\n${error.message}"
+                } else {
+                    val error = fetchResult.exceptionOrNull()
+                    tvFovTestResult.text = "✓ Connected but parsing failed:\n${error?.message}"
                     tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
                 }
             } else {
