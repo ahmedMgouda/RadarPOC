@@ -4,7 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
-import android.widget.RadioButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -16,6 +16,7 @@ import java.util.*
 
 /**
  * Adapter for displaying map files in a RecyclerView
+ * All map files are automatically loaded - no selection needed
  */
 class MapFileAdapter(
     private val onMapSelected: (MapFileManager.MapFile) -> Unit,
@@ -38,7 +39,7 @@ class MapFileAdapter(
         private val onMapDeleted: (MapFileManager.MapFile) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
         
-        private val radioButton: RadioButton = itemView.findViewById(R.id.rbMapFile)
+        private val ivMapIcon: ImageView = itemView.findViewById(R.id.ivMapIcon)
         private val tvMapName: TextView = itemView.findViewById(R.id.tvMapName)
         private val tvMapInfo: TextView = itemView.findViewById(R.id.tvMapInfo)
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btnDeleteMap)
@@ -46,16 +47,15 @@ class MapFileAdapter(
         private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
         
         fun bind(mapFile: MapFileManager.MapFile) {
-            radioButton.isChecked = mapFile.isActive
             tvMapName.text = mapFile.displayName
             tvMapInfo.text = "${mapFile.sizeFormatted} • ${dateFormat.format(Date(mapFile.lastModified))}"
             
-            // Handle selection
-            itemView.setOnClickListener {
-                onMapSelected(mapFile)
-            }
+            // All maps are always active (green checkmark)
+            ivMapIcon.setImageResource(R.drawable.ic_check_circle)
+            ivMapIcon.setColorFilter(0xFF4CAF50.toInt()) // Green color
             
-            radioButton.setOnClickListener {
+            // Handle tap to show info
+            itemView.setOnClickListener {
                 onMapSelected(mapFile)
             }
             
