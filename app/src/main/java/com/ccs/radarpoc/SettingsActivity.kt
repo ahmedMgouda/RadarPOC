@@ -12,7 +12,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
-import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +22,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.ccs.radarpoc.data.AppSettings
+import com.ccs.radarpoc.data.repository.RadarFOVRepository
 import com.ccs.radarpoc.network.RadarApiClient
 import com.ccs.radarpoc.ui.MapFileAdapter
 import com.ccs.radarpoc.util.MapFileManager
@@ -55,6 +55,14 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etStaleTimeout: TextInputEditText
     private lateinit var btnTestConnection: Button
     private lateinit var tvTestResult: TextView
+    
+    // FOV settings views
+    private lateinit var etFovPollInterval: TextInputEditText
+    private lateinit var switchShowFov: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchShowBoresight: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchShowRadarMarkers: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var btnTestFovConnection: Button
+    private lateinit var tvFovTestResult: TextView
     
     // Drone settings views
     private lateinit var etMissionUpdateInterval: TextInputEditText
@@ -295,8 +303,20 @@ class SettingsActivity : AppCompatActivity() {
         btnTestConnection = view.findViewById(R.id.btnTestConnection)
         tvTestResult = view.findViewById(R.id.tvTestResult)
         
+        // FOV settings
+        etFovPollInterval = view.findViewById(R.id.etFovPollInterval)
+        switchShowFov = view.findViewById(R.id.switchShowFov)
+        switchShowBoresight = view.findViewById(R.id.switchShowBoresight)
+        switchShowRadarMarkers = view.findViewById(R.id.switchShowRadarMarkers)
+        btnTestFovConnection = view.findViewById(R.id.btnTestFovConnection)
+        tvFovTestResult = view.findViewById(R.id.tvFovTestResult)
+        
         btnTestConnection.setOnClickListener {
             testConnection()
+        }
+        
+        btnTestFovConnection.setOnClickListener {
+            testFovConnection()
         }
     }
     
@@ -348,6 +368,12 @@ class SettingsActivity : AppCompatActivity() {
         etRadarBaseUrl.setText(appSettings.radarBaseUrl)
         etPollInterval.setText(appSettings.pollInterval.toString())
         etStaleTimeout.setText(appSettings.staleTimeout.toString())
+        
+        // FOV settings
+        etFovPollInterval.setText(appSettings.fovPollInterval.toString())
+        switchShowFov.isChecked = appSettings.showFOV
+        switchShowBoresight.isChecked = appSettings.showBoresight
+        switchShowRadarMarkers.isChecked = appSettings.showRadarMarkers
         
         // Drone settings
         etMissionUpdateInterval.setText(appSettings.missionUpdateInterval.toString())
@@ -686,6 +712,7 @@ class SettingsActivity : AppCompatActivity() {
         val baseUrl = etRadarBaseUrl.text.toString().trim()
         val pollInterval = etPollInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_POLL_INTERVAL
         val staleTimeout = etStaleTimeout.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_STALE_TIMEOUT
+        val fovPollInterval = etFovPollInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_FOV_POLL_INTERVAL
         val missionUpdateInterval = etMissionUpdateInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_MISSION_UPDATE_INTERVAL
         
         if (baseUrl.isEmpty()) {
@@ -706,17 +733,33 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         
+        if (fovPollInterval < 5) {
+            Toast.makeText(this, "FOV poll interval must be at least 5 seconds", Toast.LENGTH_SHORT).show()
+            viewPager.currentItem = 0
+            return
+        }
+        
         if (missionUpdateInterval < 1) {
             Toast.makeText(this, "Mission update interval must be at least 1 second", Toast.LENGTH_SHORT).show()
             viewPager.currentItem = 2 // Switch to Drone tab
             return
         }
         
+        // Save radar settings
         appSettings.radarBaseUrl = baseUrl
         appSettings.pollInterval = pollInterval
         appSettings.staleTimeout = staleTimeout
+        
+        // Save FOV settings
+        appSettings.fovPollInterval = fovPollInterval
+        appSettings.showFOV = switchShowFov.isChecked
+        appSettings.showBoresight = switchShowBoresight.isChecked
+        appSettings.showRadarMarkers = switchShowRadarMarkers.isChecked
+        
+        // Save drone settings
         appSettings.missionUpdateInterval = missionUpdateInterval
         
+        // Save map display settings
         appSettings.showCompass = switchShowCompass.isChecked
         appSettings.showZoomButtons = switchShowZoomButtons.isChecked
         appSettings.showScaleBar = switchShowScaleBar.isChecked
@@ -748,6 +791,48 @@ class SettingsActivity : AppCompatActivity() {
                 if (success) 0xFF4CAF50.toInt() else 0xFFF44336.toInt()
             )
             btnTestConnection.isEnabled = true
+        }
+    }
+    
+    private fun testFovConnection() {
+        val baseUrl = etRadarBaseUrl.text.toString().trim()
+        
+        if (baseUrl.isEmpty()) {
+            Toast.makeText(this, "Please enter a valid radar base URL first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        tvFovTestResult.visibility = View.VISIBLE
+        tvFovTestResult.text = "Testing FOV endpoint..."
+        btnTestFovConnection.isEnabled = false
+        
+        val fovRepository = RadarFOVRepository(baseUrl)
+        
+        lifecycleScope.launch {
+            val (success, message) = fovRepository.testConnection()
+            
+            if (success) {
+                // Also try to parse the data
+                val fetchResult = fovRepository.fetchFOVData(forceRefresh = true)
+                fetchResult.onSuccess { data ->
+                    tvFovTestResult.text = buildString {
+                        append("✓ Connected\n")
+                        append("Radars found: ${data.radarCount}\n")
+                        data.radars.forEach { radar ->
+                            append("• ${radar.name}\n")
+                        }
+                    }
+                    tvFovTestResult.setBackgroundColor(0xFF4CAF50.toInt())
+                }.onFailure { error ->
+                    tvFovTestResult.text = "✓ Connected but parsing failed:\n${error.message}"
+                    tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
+                }
+            } else {
+                tvFovTestResult.text = message
+                tvFovTestResult.setBackgroundColor(0xFFF44336.toInt())
+            }
+            
+            btnTestFovConnection.isEnabled = true
         }
     }
     
