@@ -41,13 +41,14 @@
         android:usesCleartextTraffic="true"
         tools:replace="android:allowBackup">
 
-        <!-- Main Activity -->
+        <!-- Main Activity - Fullscreen Immersive -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:screenOrientation="landscape"
-            android:theme="@style/Theme.RadarPOC">
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.RadarPOC.Fullscreen">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
