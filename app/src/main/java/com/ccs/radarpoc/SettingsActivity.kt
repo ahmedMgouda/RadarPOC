@@ -45,6 +45,12 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnMapInstructions: Button
     private lateinit var tvCurrentMapSource: TextView
     
+    // Map Display Switches
+    private lateinit var switchShowCompass: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchShowZoomButtons: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchShowScaleBar: com.google.android.material.switchmaterial.SwitchMaterial
+    private lateinit var switchEnableMapRotation: com.google.android.material.switchmaterial.SwitchMaterial
+    
     private lateinit var appSettings: AppSettings
     private lateinit var mapFileAdapter: MapFileAdapter
     
@@ -90,14 +96,29 @@ class SettingsActivity : AppCompatActivity() {
         btnMapInstructions = findViewById(R.id.btnMapInstructions)
         tvCurrentMapSource = findViewById(R.id.tvCurrentMapSource)
         
+        // Map Display Switches
+        switchShowCompass = findViewById(R.id.switchShowCompass)
+        switchShowZoomButtons = findViewById(R.id.switchShowZoomButtons)
+        switchShowScaleBar = findViewById(R.id.switchShowScaleBar)
+        switchEnableMapRotation = findViewById(R.id.switchEnableMapRotation)
+        
         setupMapFilesRecyclerView()
     }
     
     private fun loadSettings() {
+        // Radar settings
         etRadarBaseUrl.setText(appSettings.radarBaseUrl)
         etPollInterval.setText(appSettings.pollInterval.toString())
         etStaleTimeout.setText(appSettings.staleTimeout.toString())
+        
+        // Drone settings
         etMissionUpdateInterval.setText(appSettings.missionUpdateInterval.toString())
+        
+        // Map Display settings
+        switchShowCompass.isChecked = appSettings.showCompass
+        switchShowZoomButtons.isChecked = appSettings.showZoomButtons
+        switchShowScaleBar.isChecked = appSettings.showScaleBar
+        switchEnableMapRotation.isChecked = appSettings.enableMapRotation
     }
     
     private fun setupListeners() {
@@ -475,6 +496,12 @@ class SettingsActivity : AppCompatActivity() {
         appSettings.pollInterval = pollInterval
         appSettings.staleTimeout = staleTimeout
         appSettings.missionUpdateInterval = missionUpdateInterval
+        
+        // Save map display settings
+        appSettings.showCompass = switchShowCompass.isChecked
+        appSettings.showZoomButtons = switchShowZoomButtons.isChecked
+        appSettings.showScaleBar = switchShowScaleBar.isChecked
+        appSettings.enableMapRotation = switchEnableMapRotation.isChecked
         
         Toast.makeText(this, "Settings saved successfully", Toast.LENGTH_SHORT).show()
         finish()

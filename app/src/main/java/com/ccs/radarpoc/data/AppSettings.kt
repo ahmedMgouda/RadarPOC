@@ -18,12 +18,24 @@ class AppSettings(context: Context) {
         private const val KEY_MINIMUM_DISTANCE = "minimum_distance"
         private const val KEY_ACTIVE_MAP_FILE = "active_map_file"
         
+        // Map Display Settings
+        private const val KEY_SHOW_COMPASS = "show_compass"
+        private const val KEY_SHOW_ZOOM_BUTTONS = "show_zoom_buttons"
+        private const val KEY_SHOW_SCALE_BAR = "show_scale_bar"
+        private const val KEY_ENABLE_MAP_ROTATION = "enable_map_rotation"
+        
         // Default values
         const val DEFAULT_RADAR_BASE_URL = "http://192.168.1.100:8080"
         const val DEFAULT_POLL_INTERVAL = 1 // seconds
         const val DEFAULT_STALE_TIMEOUT = 5 // seconds
         const val DEFAULT_MISSION_UPDATE_INTERVAL = 3 // seconds
         const val DEFAULT_MINIMUM_DISTANCE = 5.0 // meters
+        
+        // Map Display Defaults
+        const val DEFAULT_SHOW_COMPASS = true
+        const val DEFAULT_SHOW_ZOOM_BUTTONS = true
+        const val DEFAULT_SHOW_SCALE_BAR = true
+        const val DEFAULT_ENABLE_MAP_ROTATION = false // Professional radar standard
     }
     
     var radarBaseUrl: String
@@ -52,4 +64,37 @@ class AppSettings(context: Context) {
     var activeMapFilePath: String?
         get() = prefs.getString(KEY_ACTIVE_MAP_FILE, null)
         set(value) = prefs.edit().putString(KEY_ACTIVE_MAP_FILE, value).apply()
+    
+    // ========================================
+    // Map Display Settings
+    // ========================================
+    
+    /**
+     * Show/hide compass button on map
+     */
+    var showCompass: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_COMPASS, DEFAULT_SHOW_COMPASS)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_COMPASS, value).apply()
+    
+    /**
+     * Show/hide zoom in/out buttons on map
+     */
+    var showZoomButtons: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_ZOOM_BUTTONS, DEFAULT_SHOW_ZOOM_BUTTONS)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_ZOOM_BUTTONS, value).apply()
+    
+    /**
+     * Show/hide scale bar overlay on map
+     */
+    var showScaleBar: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_SCALE_BAR, DEFAULT_SHOW_SCALE_BAR)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_SCALE_BAR, value).apply()
+    
+    /**
+     * Enable/disable map rotation with gestures
+     * Professional radar apps typically keep this disabled (North-up)
+     */
+    var enableMapRotation: Boolean
+        get() = prefs.getBoolean(KEY_ENABLE_MAP_ROTATION, DEFAULT_ENABLE_MAP_ROTATION)
+        set(value) = prefs.edit().putBoolean(KEY_ENABLE_MAP_ROTATION, value).apply()
 }

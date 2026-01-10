@@ -207,18 +207,16 @@ class MainActivity : AppCompatActivity() {
             // Animate map rotation to 0 (north)
             map.mapOrientation = 0f
             
-            // Animate compass icon back to 0
-            val rotateAnimation = RotateAnimation(
-                currentCompassRotation,
-                0f,
-                Animation.RELATIVE_TO_SELF, 0.5f,
-                Animation.RELATIVE_TO_SELF, 0.5f
-            ).apply {
-                duration = 300
-                fillAfter = true
-            }
-            binding.btnCompass.startAnimation(rotateAnimation)
-            currentCompassRotation = 0f
+            // Reset compass icon rotation (smooth transition)
+            binding.btnCompass.animate()
+                .rotation(0f)
+                .setDuration(300)
+                .withEndAction {
+                    // Ensure it's set after animation
+                    binding.btnCompass.rotation = 0f
+                    currentCompassRotation = 0f
+                }
+                .start()
             
             Toast.makeText(this, "Map reset to North", Toast.LENGTH_SHORT).show()
         }
@@ -339,6 +337,22 @@ class MainActivity : AppCompatActivity() {
                     setTileSource(result.tileSource)
                     setUseDataConnection(false) // Pure offline mode
                     
+                    // ========================================
+                    // AUTO-DETECT ZOOM LIMITS FROM LOADED MAPS
+                    // ========================================
+                    if (result.loadedFiles.isNotEmpty()) {
+                        // Get min/max zoom from all loaded files
+                        val minZoom = result.loadedFiles.minOf { it.minZoom }
+                        val maxZoom = result.loadedFiles.maxOf { it.maxZoom }
+                        
+                        // Apply zoom limits to prevent blank tiles
+                        minZoomLevel = minZoom.toDouble()
+                        maxZoomLevel = maxZoom.toDouble()
+                        
+                        android.util.Log.d(TAG, "✓ Auto-detected zoom limits: $minZoom-$maxZoom")
+                        android.util.Log.d(TAG, "  This prevents zooming beyond available tiles")
+                    }
+                    
                     // Show summary toast
                     val summary = MapTileProviderFactory.getLoadedMapsSummary(result.loadedFiles)
                     Toast.makeText(
@@ -377,9 +391,12 @@ class MainActivity : AppCompatActivity() {
             // Enable multi-touch controls (pinch to zoom)
             setMultiTouchControls(true)
             
-            // Set zoom levels
-            minZoomLevel = 3.0
-            maxZoomLevel = 22.0  // Allow overzoom for smooth experience
+            // Set default zoom levels (will be overridden by auto-detect if offline maps loaded)
+            // These are only used when no offline maps are available
+            if (mapFiles.isEmpty()) {
+                minZoomLevel = 3.0
+                maxZoomLevel = 22.0
+            }
             
             // DISABLE built-in zoom controls (we use custom ones)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
@@ -598,6 +615,17 @@ class MainActivity : AppCompatActivity() {
         updateBottomSheet(state)
         handleToast(state.toastMessage)
         handleError(state.errorMessage)
+        
+        // Update compass rotation if rotation is enabled
+        val settings = AppSettings(this)
+        if (settings.enableMapRotation) {
+            mapView?.let { map ->
+                val orientation = map.mapOrientation
+                if (orientation != currentCompassRotation) {
+                    updateCompassRotation(orientation)
+                }
+            }
+        }
     }
     
     /**
@@ -891,6 +919,9 @@ class MainActivity : AppCompatActivity() {
         mapView?.onResume() // OSMDroid lifecycle
         viewModel.startRadarPolling()
         
+        // Apply map display settings
+        applyMapDisplaySettings()
+        
         // Reload map tiles in case settings changed
         reloadMapTilesIfNeeded()
     }
@@ -906,6 +937,90 @@ class MainActivity : AppCompatActivity() {
         mapView?.onDetach() // OSMDroid lifecycle
         cleanupCameraView()
         TrackMarkerHelper.clearCache()
+    }
+    
+    /**
+     * Apply map display settings from preferences
+     */
+    private fun applyMapDisplaySettings() {
+        val settings = AppSettings(this)
+        
+        mapView?.let { map ->
+            // Apply compass visibility
+            binding.btnCompass.visibility = 
+                if (settings.showCompass) View.VISIBLE else View.GONE
+            
+            // Apply zoom buttons visibility
+            val zoomButtonsVisible = if (settings.showZoomButtons) View.VISIBLE else View.GONE
+            binding.btnZoomIn.visibility = zoomButtonsVisible
+            binding.btnZoomOut.visibility = zoomButtonsVisible
+            
+            // Apply scale bar visibility
+            scaleBarOverlay?.isEnabled = settings.showScaleBar
+            
+            // Apply map rotation setting
+            if (settings.enableMapRotation) {
+                // Enable rotation with gestures - use rotation gesture overlay
+                map.setMultiTouchControls(true)
+                // Enable rotation gestures (two-finger twist)
+                org.osmdroid.views.overlay.gestures.RotationGestureOverlay(map).also {
+                    it.isEnabled = true
+                    // Remove old rotation overlay if exists
+                    map.overlays.removeAll { overlay -> 
+                        overlay is org.osmdroid.views.overlay.gestures.RotationGestureOverlay 
+                    }
+                    map.overlays.add(it)
+                }
+                
+                // Add map listener to update compass rotation
+                map.addMapListener(object : org.osmdroid.events.MapListener {
+                    override fun onScroll(event: org.osmdroid.events.ScrollEvent?): Boolean {
+                        return true
+                    }
+                    
+                    override fun onZoom(event: org.osmdroid.events.ZoomEvent?): Boolean {
+                        return true
+                    }
+                })
+                
+                // Add map orientation listener to rotate compass
+                map.post {
+                    updateCompassRotation(map.mapOrientation)
+                }
+                
+                // Update compass button appearance - make it interactive
+                binding.btnCompass.alpha = 1.0f
+                binding.btnCompass.isEnabled = true
+            } else {
+                // Disable rotation - keep North-up
+                map.mapOrientation = 0f
+                // Remove rotation gesture overlay
+                map.overlays.removeAll { overlay -> 
+                    overlay is org.osmdroid.views.overlay.gestures.RotationGestureOverlay 
+                }
+                // Keep multi-touch for zoom
+                map.setMultiTouchControls(true)
+                
+                // Reset compass rotation
+                binding.btnCompass.rotation = 0f
+                currentCompassRotation = 0f
+                
+                // Make compass static (grayed out)
+                binding.btnCompass.alpha = 0.5f
+                binding.btnCompass.isEnabled = false
+            }
+            
+            map.invalidate()
+        }
+    }
+    
+    /**
+     * Update compass icon rotation to match map orientation
+     */
+    private fun updateCompassRotation(mapOrientation: Float) {
+        // Rotate compass icon to match map orientation
+        binding.btnCompass.rotation = mapOrientation
+        currentCompassRotation = mapOrientation
     }
     
     /**
