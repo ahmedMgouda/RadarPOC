@@ -9,6 +9,8 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.RotateAnimation
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -33,8 +35,6 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.ScaleBarOverlay
-import org.osmdroid.views.overlay.compass.CompassOverlay
-import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.pow
@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         private const val DEFAULT_LNG = 31.2357
         private const val PIP_MARGIN = 16
         private const val MARKER_CLICK_THRESHOLD = 50f // pixels
+        private const val ZOOM_ANIMATION_DURATION = 250L
         
         // Alpha values for status icons
         private const val ALPHA_CONNECTED = 1.0f
@@ -73,8 +74,10 @@ class MainActivity : AppCompatActivity() {
     private var droneMarker: Marker? = null
     
     // Map overlays
-    private var compassOverlay: CompassOverlay? = null
     private var scaleBarOverlay: ScaleBarOverlay? = null
+    
+    // Current compass rotation for animation
+    private var currentCompassRotation = 0f
     
     // Camera Views
     private var cameraView: AutelCodecView? = null
@@ -99,6 +102,7 @@ class MainActivity : AppCompatActivity() {
         setupBottomSheet()
         setupPipGestures()
         setupClickListeners()
+        setupMapControls()
         setupOSMDroid()
         setupDroneCamera()
         observeState()
@@ -176,6 +180,51 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
+     * Setup custom map controls (zoom buttons, compass)
+     */
+    private fun setupMapControls() {
+        // Zoom In button
+        binding.btnZoomIn.setOnClickListener {
+            mapView?.controller?.zoomIn(ZOOM_ANIMATION_DURATION)
+        }
+        
+        // Zoom Out button
+        binding.btnZoomOut.setOnClickListener {
+            mapView?.controller?.zoomOut(ZOOM_ANIMATION_DURATION)
+        }
+        
+        // Compass button - reset to north
+        binding.btnCompass.setOnClickListener {
+            resetMapToNorth()
+        }
+    }
+    
+    /**
+     * Reset map orientation to north with animation
+     */
+    private fun resetMapToNorth() {
+        mapView?.let { map ->
+            // Animate map rotation to 0 (north)
+            map.mapOrientation = 0f
+            
+            // Animate compass icon back to 0
+            val rotateAnimation = RotateAnimation(
+                currentCompassRotation,
+                0f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
+            ).apply {
+                duration = 300
+                fillAfter = true
+            }
+            binding.btnCompass.startAnimation(rotateAnimation)
+            currentCompassRotation = 0f
+            
+            Toast.makeText(this, "Map reset to North", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    /**
      * Setup click listeners
      */
     private fun setupClickListeners() {
@@ -238,7 +287,7 @@ class MainActivity : AppCompatActivity() {
      * - Multiple MBTiles support
      * - Smooth zoom/scroll
      * - Overzoom support
-     * - Scale bar and compass
+     * - Scale bar
      */
     private fun setupOSMDroid() {
         // Configure OSMDroid - MUST be done before using the map
@@ -332,8 +381,8 @@ class MainActivity : AppCompatActivity() {
             minZoomLevel = 3.0
             maxZoomLevel = 22.0  // Allow overzoom for smooth experience
             
-            // Enable zoom controls (built-in +/- buttons)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
+            // DISABLE built-in zoom controls (we use custom ones)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             
             // Disable map rotation (keep north up for easier navigation)
             setMapOrientation(0f)
@@ -345,27 +394,14 @@ class MainActivity : AppCompatActivity() {
             // MAP OVERLAYS
             // ========================================
             
-            // Add scale bar
+            // Add scale bar (bottom left)
             scaleBarOverlay = ScaleBarOverlay(this).apply {
                 setCentred(false)
                 setAlignBottom(true)
-                setAlignRight(true)
-                setScaleBarOffset(
-                    resources.displayMetrics.widthPixels / 2 - 100,
-                    50
-                )
+                setAlignRight(false)
+                setScaleBarOffset(50, 50)
             }
             overlays.add(scaleBarOverlay)
-            
-            // Add compass (optional - can be enabled if needed)
-            compassOverlay = CompassOverlay(
-                this@MainActivity,
-                InternalCompassOrientationProvider(this@MainActivity),
-                this
-            ).apply {
-                enableCompass()
-            }
-            overlays.add(compassOverlay)
             
             // ========================================
             // INITIAL POSITION
@@ -556,6 +592,7 @@ class MainActivity : AppCompatActivity() {
         updatePipVisibility(state)
         updateShowPipButton(state)
         updateLockedTrackChip(state)
+        updateMapControlsVisibility(state)
         updateDroneMarker(state.droneLocation)
         updateMapMarkers(state.tracks, state.lockedTrackId)
         updateBottomSheet(state)
@@ -675,6 +712,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.lockedTrackChip.visibility = View.GONE
         }
+    }
+    
+    /**
+     * Update map controls visibility based on current view
+     */
+    private fun updateMapControlsVisibility(state: MainUiState) {
+        // Show map controls only when map is the main view
+        binding.mapControlsContainer.visibility = 
+            if (state.mainView == MainView.MAP) View.VISIBLE else View.GONE
     }
     
     /**
@@ -843,7 +889,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mapView?.onResume() // OSMDroid lifecycle
-        compassOverlay?.enableCompass()
         viewModel.startRadarPolling()
         
         // Reload map tiles in case settings changed
@@ -853,7 +898,6 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         mapView?.onPause() // OSMDroid lifecycle
-        compassOverlay?.disableCompass()
         viewModel.stopRadarPolling()
     }
     
