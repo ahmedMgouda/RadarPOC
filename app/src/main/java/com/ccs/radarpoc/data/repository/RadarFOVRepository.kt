@@ -53,14 +53,14 @@ class RadarFOVRepository(
     suspend fun fetchFOVData(
         forceRefresh: Boolean = false,
         cacheValidityMs: Long = 30000
-    ): Result<RadarFOVData> = withContext(Dispatchers.IO) {
+    ): kotlin.Result<RadarFOVData> = withContext(Dispatchers.IO) {
         
         // Return cached data if valid
         if (!forceRefresh && cachedData != null) {
             val age = System.currentTimeMillis() - lastFetchTime
             if (age < cacheValidityMs) {
                 Log.d(TAG, "Returning cached FOV data (age: ${age}ms)")
-                return@withContext Result.success(cachedData!!)
+                return@withContext kotlin.Result.success(cachedData!!)
             }
         }
         
@@ -100,7 +100,7 @@ class RadarFOVRepository(
                 connection.disconnect()
                 val error = "HTTP error: $responseCode"
                 Log.e(TAG, error)
-                Result.failure(Exception(error))
+                kotlin.Result.failure(Exception(error))
             }
             
         } catch (e: Exception) {
@@ -109,10 +109,10 @@ class RadarFOVRepository(
             // Return cached data if available, even if stale
             cachedData?.let { cached ->
                 Log.d(TAG, "Returning stale cached data due to error")
-                return@withContext Result.success(cached)
+                return@withContext kotlin.Result.success(cached)
             }
             
-            Result.failure(e)
+            kotlin.Result.failure(e)
         }
     }
     
