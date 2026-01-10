@@ -37,6 +37,114 @@
 
     </FrameLayout>
 
+    <!-- Map Controls - Left Side (Google Maps Style) -->
+    <LinearLayout
+        android:id="@+id/mapControlsContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="12dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <!-- Compass Button -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/compassCard"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="@android:color/white"
+            app:strokeWidth="0dp">
+
+            <ImageView
+                android:id="@+id/btnCompass"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="10dp"
+                android:src="@drawable/ic_compass"
+                android:scaleType="fitCenter"
+                android:contentDescription="Compass"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Zoom Controls Container -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/zoomControlsCard"
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="@android:color/white"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <!-- Zoom In Button -->
+                <ImageButton
+                    android:id="@+id/btnZoomIn"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_add"
+                    android:scaleType="center"
+                    android:padding="10dp"
+                    android:contentDescription="Zoom in" />
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="28dp"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0" />
+
+                <!-- Zoom Out Button -->
+                <ImageButton
+                    android:id="@+id/btnZoomOut"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_remove"
+                    android:scaleType="center"
+                    android:padding="10dp"
+                    android:contentDescription="Zoom out" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- My Location Button (optional, for future use) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/myLocationCard"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="@android:color/white"
+            app:strokeWidth="0dp"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/btnMyLocation"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="10dp"
+                android:src="@drawable/ic_my_location"
+                android:scaleType="fitCenter"
+                android:contentDescription="My location"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
     <!-- PiP Window (Draggable) -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/pipContainer"
