@@ -23,20 +23,18 @@ import com.ccs.radarpoc.data.AppSettings
 import com.ccs.radarpoc.databinding.ActivityMainBinding
 import com.ccs.radarpoc.ui.main.*
 import com.ccs.radarpoc.util.MapFileManager
+import com.ccs.radarpoc.util.MapTileProviderFactory
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.tileprovider.modules.ArchiveFileFactory
-import org.osmdroid.tileprovider.modules.IArchiveFile
-import org.osmdroid.tileprovider.modules.MapTileModuleProviderBase
-import org.osmdroid.tileprovider.modules.MapTileFileArchiveProvider
-import org.osmdroid.tileprovider.util.SimpleRegisterReceiver
-import org.osmdroid.tileprovider.MapTileProviderArray
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
-import java.io.File
+import org.osmdroid.views.overlay.ScaleBarOverlay
+import org.osmdroid.views.overlay.compass.CompassOverlay
+import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.pow
@@ -44,7 +42,7 @@ import kotlin.math.sqrt
 
 /**
  * Main Activity - Material Design 3 UI with draggable PiP
- * Using OSMDroid for full offline map support
+ * Using OSMDroid for full offline map support with multiple MBTiles files
  */
 class MainActivity : AppCompatActivity() {
     
@@ -73,6 +71,10 @@ class MainActivity : AppCompatActivity() {
     private var mapView: MapView? = null
     private val trackMarkers = mutableMapOf<String, Marker>()
     private var droneMarker: Marker? = null
+    
+    // Map overlays
+    private var compassOverlay: CompassOverlay? = null
+    private var scaleBarOverlay: ScaleBarOverlay? = null
     
     // Camera Views
     private var cameraView: AutelCodecView? = null
@@ -232,159 +234,150 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Setup OSMDroid map with best practices
-     * Supports both online and offline modes with auto-detection
+     * Setup OSMDroid map with all optimizations:
+     * - Multiple MBTiles support
+     * - Smooth zoom/scroll
+     * - Overzoom support
+     * - Scale bar and compass
      */
     private fun setupOSMDroid() {
         // Configure OSMDroid - MUST be done before using the map
         Configuration.getInstance().apply {
             load(applicationContext, getSharedPreferences("osmdroid", MODE_PRIVATE))
+            
             // Set user agent to avoid being blocked
             userAgentValue = packageName
-            // Enable debugging if needed
+            
+            // Enable debug logging (disable in production)
             isDebugMode = false
-            // Set cache size limits
-            tileFileSystemCacheMaxBytes = 100L * 1024 * 1024 // 100MB
-            tileFileSystemCacheTrimBytes = 80L * 1024 * 1024  // Trim to 80MB
+            isDebugMapView = false
+            isDebugTileProviders = false
+            
+            // Cache settings for better performance
+            tileFileSystemCacheMaxBytes = 500L * 1024 * 1024  // 500MB cache
+            tileFileSystemCacheTrimBytes = 400L * 1024 * 1024 // Trim to 400MB
+            
+            // Tile download settings
+            tileDownloadThreads = 4
+            tileFileSystemThreads = 4
+            
+            // Expiration settings
+            expirationOverrideDuration = 1000L * 60 * 60 * 24 * 30 // 30 days
         }
         
         // Get MapView reference from layout
         mapView = binding.mapView
         
-        // Validate OSMDroid setup and check for offline maps
-        val validation = MapFileManager.validateSetup(this)
-        android.util.Log.d(TAG, "OSMDroid validation: ${validation.mapFilesFound} maps found in ${validation.mapsDirectory}")
-        
-        if (!validation.isValid) {
-            validation.issues.forEach { issue ->
-                android.util.Log.w(TAG, "OSMDroid issue: $issue")
-            }
-        }
-        
-        // Configure map
+        // Configure map with all optimizations
         mapView?.apply {
-            // Load settings
-            val appSettings = AppSettings(this@MainActivity)
-            val selectedMapPath = appSettings.activeMapFilePath
-            var offlineMapLoaded = false
+            // ========================================
+            // TILE PROVIDER SETUP - Load ALL MBTiles
+            // ========================================
+            val mapFiles = MapFileManager.scanForMapFiles(this@MainActivity)
             
-            // Priority 1: Use map selected in settings
-            if (selectedMapPath != null) {
-                val mapFile = File(selectedMapPath)
+            if (mapFiles.isNotEmpty()) {
+                android.util.Log.d(TAG, "Found ${mapFiles.size} offline map files")
                 
-                if (mapFile.exists()) {
-                    android.util.Log.d(TAG, "Using selected map from settings: ${mapFile.name}")
+                // Create multi-archive provider
+                val result = MapTileProviderFactory.createMultiArchiveProvider(
+                    this@MainActivity,
+                    mapFiles
+                )
+                
+                if (result.provider != null) {
+                    // Use offline tiles from ALL MBTiles files
+                    setTileProvider(result.provider)
+                    setTileSource(result.tileSource)
+                    setUseDataConnection(false) // Pure offline mode
                     
-                    try {
-                        // Load offline archive file directly
-                        val archiveFile = ArchiveFileFactory.getArchiveFile(mapFile)
-                        
-                        if (archiveFile != null) {
-                            android.util.Log.d(TAG, "Successfully opened archive: ${mapFile.name}")
-                            
-                            // Create tile provider with the archive
-                            val archiveProvider = MapTileFileArchiveProvider(
-                                SimpleRegisterReceiver(this@MainActivity),
-                                TileSourceFactory.MAPNIK,
-                                arrayOf(archiveFile)
-                            )
-                            
-                            // Create tile provider array with our offline archive
-                            val tileProviderArray = MapTileProviderArray(
-                                TileSourceFactory.MAPNIK,
-                                SimpleRegisterReceiver(this@MainActivity),
-                                arrayOf<MapTileModuleProviderBase>(archiveProvider)
-                            )
-                            
-                            // Set the custom tile provider
-                            setTileProvider(tileProviderArray)
-                            setTileSource(TileSourceFactory.MAPNIK)
-                            setUseDataConnection(false) // Pure offline mode
-                            offlineMapLoaded = true
-                            
-                            val sizeMB = mapFile.length() / (1024.0 * 1024.0)
-                            android.util.Log.d(TAG, "Offline map loaded: ${mapFile.name} (${String.format("%.1f", sizeMB)} MB)")
-                            
-                            Toast.makeText(
-                                this@MainActivity,
-                                "✓ Offline map: ${mapFile.name}",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        } else {
-                            android.util.Log.e(TAG, "Could not open archive file: ${mapFile.name}")
-                            Toast.makeText(
-                                this@MainActivity,
-                                "Invalid map file format",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e(TAG, "Failed to load selected map: ${mapFile.name}", e)
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Error loading map: ${e.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                } else {
-                    android.util.Log.w(TAG, "Selected map file doesn't exist: $selectedMapPath")
+                    // Show summary toast
+                    val summary = MapTileProviderFactory.getLoadedMapsSummary(result.loadedFiles)
                     Toast.makeText(
                         this@MainActivity,
-                        "Map file not found",
+                        "✓ Offline: $summary",
                         Toast.LENGTH_SHORT
                     ).show()
-                }
-            }
-            
-            // Priority 2: Auto-detect offline maps if none selected
-            if (!offlineMapLoaded) {
-                val mapFiles = MapFileManager.scanForMapFiles(this@MainActivity)
-                
-                if (mapFiles.isNotEmpty()) {
-                    // Use the most recent offline map file
-                    val autoDetectedMap = mapFiles.first()
-                    android.util.Log.d(TAG, "Auto-detected offline map: ${autoDetectedMap.name} (${autoDetectedMap.formattedSize})")
                     
-                    try {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setUseDataConnection(false)
-                        offlineMapLoaded = true
-                        
-                        android.util.Log.d(TAG, "Offline map configured: ${autoDetectedMap.name}")
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Using offline map: ${autoDetectedMap.name}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } catch (e: Exception) {
-                        android.util.Log.e(TAG, "Failed to configure offline map", e)
+                    android.util.Log.d(TAG, "Loaded offline maps: $summary")
+                    
+                    // Log any errors
+                    result.errors.forEach { error ->
+                        android.util.Log.w(TAG, "Map loading issue: $error")
                     }
+                } else {
+                    // Fallback to online if no valid archives
+                    android.util.Log.w(TAG, "No valid offline maps, falling back to online")
+                    setupOnlineTiles()
                 }
+            } else {
+                // No offline maps found, use online
+                android.util.Log.d(TAG, "No offline maps found, using online tiles")
+                setupOnlineTiles()
             }
             
-            // Priority 3: Fallback to online tiles
-            if (!offlineMapLoaded) {
-                android.util.Log.d(TAG, "No offline maps available, using online tiles")
-                setTileSource(TileSourceFactory.MAPNIK)
-                setUseDataConnection(true) // Enable internet for online tiles
-                
-                Toast.makeText(
-                    this@MainActivity,
-                    "Using online maps. Select offline map in Settings.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+            // ========================================
+            // SMOOTH ZOOM AND SCROLL SETTINGS
+            // ========================================
+            
+            // Enable smooth zooming
+            isTilesScaledToDpi = true
+            
+            // Enable fling (momentum) scrolling
+            isFlingEnabled = true
             
             // Enable multi-touch controls (pinch to zoom)
             setMultiTouchControls(true)
             
-            // Set min/max zoom levels
+            // Set zoom levels
             minZoomLevel = 3.0
-            maxZoomLevel = 19.0
+            maxZoomLevel = 22.0  // Allow overzoom for smooth experience
+            
+            // Enable zoom controls (built-in +/- buttons)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
+            
+            // Disable map rotation (keep north up for easier navigation)
+            setMapOrientation(0f)
+            
+            // Enable hardware acceleration for smoother rendering
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            
+            // ========================================
+            // MAP OVERLAYS
+            // ========================================
+            
+            // Add scale bar
+            scaleBarOverlay = ScaleBarOverlay(this).apply {
+                setCentred(false)
+                setAlignBottom(true)
+                setAlignRight(true)
+                setScaleBarOffset(
+                    resources.displayMetrics.widthPixels / 2 - 100,
+                    50
+                )
+            }
+            overlays.add(scaleBarOverlay)
+            
+            // Add compass (optional - can be enabled if needed)
+            compassOverlay = CompassOverlay(
+                this@MainActivity,
+                InternalCompassOrientationProvider(this@MainActivity),
+                this
+            ).apply {
+                enableCompass()
+            }
+            overlays.add(compassOverlay)
+            
+            // ========================================
+            // INITIAL POSITION
+            // ========================================
             
             // Set initial position (Cairo, Egypt)
             controller.setZoom(DEFAULT_ZOOM)
             controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LNG))
+            
+            // ========================================
+            // INTERACTION HANDLERS
+            // ========================================
             
             // Add marker click handler overlay
             setupMarkerClickListener()
@@ -396,7 +389,21 @@ class MainActivity : AppCompatActivity() {
             invalidate()
         }
         
-        android.util.Log.d(TAG, "OSMDroid setup complete")
+        android.util.Log.d(TAG, "OSMDroid setup complete with all optimizations")
+    }
+    
+    /**
+     * Setup online tiles as fallback
+     */
+    private fun MapView.setupOnlineTiles() {
+        setTileSource(TileSourceFactory.MAPNIK)
+        setUseDataConnection(true)
+        
+        Toast.makeText(
+            this@MainActivity,
+            "Using online maps. Add offline maps in Settings.",
+            Toast.LENGTH_LONG
+        ).show()
     }
     
     /**
@@ -528,8 +535,12 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.centerOnTrackEvent.collect { track ->
-                    // OSMDroid: animate to position
-                    mapView?.controller?.animateTo(GeoPoint(track.latitude, track.longitude))
+                    // OSMDroid: animate to position smoothly
+                    mapView?.controller?.animateTo(
+                        GeoPoint(track.latitude, track.longitude),
+                        18.0,  // Zoom level
+                        1000L  // Animation duration in ms
+                    )
                 }
             }
         }
@@ -832,12 +843,17 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mapView?.onResume() // OSMDroid lifecycle
+        compassOverlay?.enableCompass()
         viewModel.startRadarPolling()
+        
+        // Reload map tiles in case settings changed
+        reloadMapTilesIfNeeded()
     }
     
     override fun onPause() {
         super.onPause()
         mapView?.onPause() // OSMDroid lifecycle
+        compassOverlay?.disableCompass()
         viewModel.stopRadarPolling()
     }
     
@@ -846,5 +862,14 @@ class MainActivity : AppCompatActivity() {
         mapView?.onDetach() // OSMDroid lifecycle
         cleanupCameraView()
         TrackMarkerHelper.clearCache()
+    }
+    
+    /**
+     * Reload map tiles if settings changed (e.g., new maps added)
+     */
+    private fun reloadMapTilesIfNeeded() {
+        // This will be called on resume to pick up any new map files
+        // For now, we just invalidate to refresh tiles
+        mapView?.invalidate()
     }
 }
