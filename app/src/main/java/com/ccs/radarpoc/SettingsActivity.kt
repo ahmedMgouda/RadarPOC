@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.widget.Button
@@ -22,6 +23,9 @@ import com.ccs.radarpoc.network.RadarApiClient
 import com.ccs.radarpoc.ui.MapFileAdapter
 import com.ccs.radarpoc.util.MapFileManager
 import com.ccs.radarpoc.util.MapTileProviderFactory
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,8 +55,22 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchShowScaleBar: com.google.android.material.switchmaterial.SwitchMaterial
     private lateinit var switchEnableMapRotation: com.google.android.material.switchmaterial.SwitchMaterial
     
+    // Security Settings Views
+    private lateinit var cardDefaultCredentialsWarning: MaterialCardView
+    private lateinit var tvCurrentUsername: TextView
+    private lateinit var etNewUsername: TextInputEditText
+    private lateinit var etNewPassword: TextInputEditText
+    private lateinit var etConfirmPassword: TextInputEditText
+    private lateinit var tilNewUsername: TextInputLayout
+    private lateinit var tilNewPassword: TextInputLayout
+    private lateinit var tilConfirmPassword: TextInputLayout
+    private lateinit var btnUpdateCredentials: Button
+    
     private lateinit var appSettings: AppSettings
     private lateinit var mapFileAdapter: MapFileAdapter
+    
+    // Authentication state
+    private var isAuthenticated = false
     
     // File picker launcher
     private val filePickerLauncher = registerForActivityResult(
@@ -67,13 +85,83 @@ class SettingsActivity : AppCompatActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        appSettings = AppSettings(this)
+        
+        // Show login dialog before showing settings
+        showLoginDialog()
+    }
+    
+    /**
+     * Show login dialog to authenticate user
+     */
+    private fun showLoginDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_login, null)
+        
+        val tilUsername = dialogView.findViewById<TextInputLayout>(R.id.tilUsername)
+        val tilPassword = dialogView.findViewById<TextInputLayout>(R.id.tilPassword)
+        val etUsername = dialogView.findViewById<TextInputEditText>(R.id.etUsername)
+        val etPassword = dialogView.findViewById<TextInputEditText>(R.id.etPassword)
+        val tvError = dialogView.findViewById<TextView>(R.id.tvError)
+        
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .setPositiveButton("Login", null) // Set to null, we'll override it
+            .setNegativeButton("Cancel") { _, _ ->
+                finish() // Close activity if user cancels
+            }
+            .create()
+        
+        dialog.setOnShowListener {
+            val loginButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            loginButton.setOnClickListener {
+                val username = etUsername.text?.toString()?.trim() ?: ""
+                val password = etPassword.text?.toString() ?: ""
+                
+                // Clear previous errors
+                tilUsername.error = null
+                tilPassword.error = null
+                tvError.visibility = View.GONE
+                
+                // Validate input
+                var hasError = false
+                if (username.isEmpty()) {
+                    tilUsername.error = "Username required"
+                    hasError = true
+                }
+                if (password.isEmpty()) {
+                    tilPassword.error = "Password required"
+                    hasError = true
+                }
+                
+                if (hasError) return@setOnClickListener
+                
+                // Validate credentials
+                if (appSettings.validateCredentials(username, password)) {
+                    isAuthenticated = true
+                    dialog.dismiss()
+                    initializeSettingsScreen()
+                } else {
+                    tvError.text = "Invalid username or password"
+                    tvError.visibility = View.VISIBLE
+                    etPassword.text?.clear()
+                }
+            }
+        }
+        
+        dialog.show()
+    }
+    
+    /**
+     * Initialize the settings screen after successful authentication
+     */
+    private fun initializeSettingsScreen() {
         setContentView(R.layout.activity_settings)
         
         // Enable back button
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "Settings"
-        
-        appSettings = AppSettings(this)
         
         initViews()
         loadSettings()
@@ -102,6 +190,17 @@ class SettingsActivity : AppCompatActivity() {
         switchShowScaleBar = findViewById(R.id.switchShowScaleBar)
         switchEnableMapRotation = findViewById(R.id.switchEnableMapRotation)
         
+        // Security Settings Views
+        cardDefaultCredentialsWarning = findViewById(R.id.cardDefaultCredentialsWarning)
+        tvCurrentUsername = findViewById(R.id.tvCurrentUsername)
+        etNewUsername = findViewById(R.id.etNewUsername)
+        etNewPassword = findViewById(R.id.etNewPassword)
+        etConfirmPassword = findViewById(R.id.etConfirmPassword)
+        tilNewUsername = findViewById(R.id.tilNewUsername)
+        tilNewPassword = findViewById(R.id.tilNewPassword)
+        tilConfirmPassword = findViewById(R.id.tilConfirmPassword)
+        btnUpdateCredentials = findViewById(R.id.btnUpdateCredentials)
+        
         setupMapFilesRecyclerView()
     }
     
@@ -119,6 +218,34 @@ class SettingsActivity : AppCompatActivity() {
         switchShowZoomButtons.isChecked = appSettings.showZoomButtons
         switchShowScaleBar.isChecked = appSettings.showScaleBar
         switchEnableMapRotation.isChecked = appSettings.enableMapRotation
+        
+        // Security settings
+        updateSecurityUI()
+    }
+    
+    /**
+     * Update security section UI
+     */
+    private fun updateSecurityUI() {
+        // Show current username
+        tvCurrentUsername.text = appSettings.authUsername
+        
+        // Show warning if using default credentials
+        if (appSettings.isUsingDefaultCredentials()) {
+            cardDefaultCredentialsWarning.visibility = View.VISIBLE
+        } else {
+            cardDefaultCredentialsWarning.visibility = View.GONE
+        }
+        
+        // Clear input fields
+        etNewUsername.text?.clear()
+        etNewPassword.text?.clear()
+        etConfirmPassword.text?.clear()
+        
+        // Clear errors
+        tilNewUsername.error = null
+        tilNewPassword.error = null
+        tilConfirmPassword.error = null
     }
     
     private fun setupListeners() {
@@ -137,6 +264,68 @@ class SettingsActivity : AppCompatActivity() {
         btnMapInstructions.setOnClickListener {
             showInstructions()
         }
+        
+        btnUpdateCredentials.setOnClickListener {
+            updateCredentials()
+        }
+    }
+    
+    /**
+     * Update user credentials
+     */
+    private fun updateCredentials() {
+        val newUsername = etNewUsername.text?.toString()?.trim() ?: ""
+        val newPassword = etNewPassword.text?.toString() ?: ""
+        val confirmPassword = etConfirmPassword.text?.toString() ?: ""
+        
+        // Clear previous errors
+        tilNewUsername.error = null
+        tilNewPassword.error = null
+        tilConfirmPassword.error = null
+        
+        // Validate input
+        var hasError = false
+        
+        if (newUsername.isEmpty()) {
+            tilNewUsername.error = "Username required"
+            hasError = true
+        } else if (newUsername.length < 3) {
+            tilNewUsername.error = "Username must be at least 3 characters"
+            hasError = true
+        }
+        
+        if (newPassword.isEmpty()) {
+            tilNewPassword.error = "Password required"
+            hasError = true
+        } else if (newPassword.length < 4) {
+            tilNewPassword.error = "Password must be at least 4 characters"
+            hasError = true
+        }
+        
+        if (confirmPassword.isEmpty()) {
+            tilConfirmPassword.error = "Please confirm password"
+            hasError = true
+        } else if (newPassword != confirmPassword) {
+            tilConfirmPassword.error = "Passwords do not match"
+            hasError = true
+        }
+        
+        if (hasError) return
+        
+        // Show confirmation dialog
+        AlertDialog.Builder(this)
+            .setTitle("Update Credentials")
+            .setMessage("Are you sure you want to update your login credentials?\n\nNew username: $newUsername")
+            .setPositiveButton("Update") { _, _ ->
+                if (appSettings.updateCredentials(newUsername, newPassword)) {
+                    Toast.makeText(this, "✓ Credentials updated successfully", Toast.LENGTH_LONG).show()
+                    updateSecurityUI()
+                } else {
+                    Toast.makeText(this, "Failed to update credentials", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
     
     /**
@@ -539,6 +728,15 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+    
+    override fun onBackPressed() {
+        // Allow back press only if authenticated
+        if (isAuthenticated) {
+            super.onBackPressed()
+        } else {
+            finish()
         }
     }
 }
