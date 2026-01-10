@@ -33,8 +33,10 @@ import com.google.android.material.tabs.TabLayoutMediator
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.FileOutputStream
 
@@ -53,6 +55,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etRadarBaseUrl: TextInputEditText
     private lateinit var etPollInterval: TextInputEditText
     private lateinit var etStaleTimeout: TextInputEditText
+    private lateinit var etStaleRemovalTimeout: TextInputEditText
     private lateinit var btnTestConnection: Button
     private lateinit var tvTestResult: TextView
     
@@ -302,6 +305,7 @@ class SettingsActivity : AppCompatActivity() {
         etRadarBaseUrl = view.findViewById(R.id.etRadarBaseUrl)
         etPollInterval = view.findViewById(R.id.etPollInterval)
         etStaleTimeout = view.findViewById(R.id.etStaleTimeout)
+        etStaleRemovalTimeout = view.findViewById(R.id.etStaleRemovalTimeout)
         btnTestConnection = view.findViewById(R.id.btnTestConnection)
         tvTestResult = view.findViewById(R.id.tvTestResult)
         
@@ -388,6 +392,7 @@ class SettingsActivity : AppCompatActivity() {
         etRadarBaseUrl.setText(appSettings.radarBaseUrl)
         etPollInterval.setText(appSettings.pollInterval.toString())
         etStaleTimeout.setText(appSettings.staleTimeout.toString())
+        etStaleRemovalTimeout.setText(appSettings.staleRemovalTimeout.toString())
         
         // FOV settings
         etFovPollInterval.setText(appSettings.fovPollInterval.toString())
@@ -733,6 +738,7 @@ class SettingsActivity : AppCompatActivity() {
         val baseUrl = etRadarBaseUrl.text.toString().trim()
         val pollInterval = etPollInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_POLL_INTERVAL
         val staleTimeout = etStaleTimeout.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_STALE_TIMEOUT
+        val staleRemovalTimeout = etStaleRemovalTimeout.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_STALE_REMOVAL_TIMEOUT
         val fovPollInterval = etFovPollInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_FOV_POLL_INTERVAL
         val missionUpdateInterval = etMissionUpdateInterval.text.toString().toIntOrNull() ?: AppSettings.DEFAULT_MISSION_UPDATE_INTERVAL
         
@@ -770,6 +776,7 @@ class SettingsActivity : AppCompatActivity() {
         appSettings.radarBaseUrl = baseUrl
         appSettings.pollInterval = pollInterval
         appSettings.staleTimeout = staleTimeout
+        appSettings.staleRemovalTimeout = staleRemovalTimeout
         
         // Save FOV settings
         appSettings.fovPollInterval = fovPollInterval
@@ -826,43 +833,58 @@ class SettingsActivity : AppCompatActivity() {
         
         tvFovTestResult.visibility = View.VISIBLE
         tvFovTestResult.text = "Testing FOV endpoint..."
+        tvFovTestResult.setBackgroundColor(0xFF2196F3.toInt()) // Blue = testing
         btnTestFovConnection.isEnabled = false
         
         val fovRepository = RadarFOVRepository(baseUrl)
         
         lifecycleScope.launch {
-            val (connectionSuccess, message) = fovRepository.testConnection()
-            
-            if (connectionSuccess) {
-                // Also try to parse the data
-                val fetchResult = fovRepository.fetchFOVData(forceRefresh = true)
-                
-                if (fetchResult.isSuccess) {
-                    val data = fetchResult.getOrNull()
-                    if (data != null) {
-                        tvFovTestResult.text = buildString {
-                            append("✓ Connected\n")
-                            append("Radars found: ${data.radarCount}\n")
-                            data.radars.forEach { radar ->
-                                append("• ${radar.name}\n")
+            try {
+                // Add 10 second timeout to prevent hanging
+                withTimeout(10000L) {
+                    val (connectionSuccess, message) = fovRepository.testConnection()
+                    
+                    if (connectionSuccess) {
+                        // Also try to parse the data
+                        val fetchResult = fovRepository.fetchFOVData(forceRefresh = true)
+                        
+                        if (fetchResult.isSuccess) {
+                            val data = fetchResult.getOrNull()
+                            if (data != null) {
+                                tvFovTestResult.text = buildString {
+                                    append("✓ Connected\n")
+                                    append("Radars found: ${data.radarCount}\n")
+                                    data.radars.forEach { radar ->
+                                        append("• ${radar.name}\n")
+                                    }
+                                }
+                                tvFovTestResult.setBackgroundColor(0xFF4CAF50.toInt())
+                            } else {
+                                tvFovTestResult.text = "✓ Connected but no data"
+                                tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
                             }
+                        } else {
+                            val error = fetchResult.exceptionOrNull()
+                            tvFovTestResult.text = "✓ Connected but parsing failed:\n${error?.message}"
+                            tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
+                            android.util.Log.e("FOVTest", "Parse error", error)
                         }
-                        tvFovTestResult.setBackgroundColor(0xFF4CAF50.toInt())
                     } else {
-                        tvFovTestResult.text = "✓ Connected but no data"
-                        tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
+                        tvFovTestResult.text = message
+                        tvFovTestResult.setBackgroundColor(0xFFF44336.toInt())
                     }
-                } else {
-                    val error = fetchResult.exceptionOrNull()
-                    tvFovTestResult.text = "✓ Connected but parsing failed:\n${error?.message}"
-                    tvFovTestResult.setBackgroundColor(0xFFFF9800.toInt())
                 }
-            } else {
-                tvFovTestResult.text = message
+            } catch (e: TimeoutCancellationException) {
+                tvFovTestResult.text = "✗ Timeout (10s)\nCheck server is running"
                 tvFovTestResult.setBackgroundColor(0xFFF44336.toInt())
+                android.util.Log.e("FOVTest", "Timeout")
+            } catch (e: Exception) {
+                tvFovTestResult.text = "✗ Error: ${e.message}"
+                tvFovTestResult.setBackgroundColor(0xFFF44336.toInt())
+                android.util.Log.e("FOVTest", "Error", e)
+            } finally {
+                btnTestFovConnection.isEnabled = true
             }
-            
-            btnTestFovConnection.isEnabled = true
         }
     }
     

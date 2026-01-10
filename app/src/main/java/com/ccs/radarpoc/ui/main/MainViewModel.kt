@@ -578,7 +578,8 @@ class MainViewModelFactory(
             val radarRepository = RadarRepository(
                 baseUrl = appSettings.radarBaseUrl,
                 pollIntervalSeconds = appSettings.pollInterval,
-                staleTimeoutSeconds = appSettings.staleTimeout
+                staleTimeoutSeconds = appSettings.staleTimeout,
+                staleRemovalTimeoutSeconds = appSettings.staleRemovalTimeout
             )
             val droneRepository = DroneRepository(
                 missionUpdateIntervalMs = appSettings.missionUpdateInterval * 1000L,

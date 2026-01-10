@@ -26,6 +26,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.autel.sdk.widget.AutelCodecView
 import com.ccs.radarpoc.data.AppSettings
+import com.ccs.radarpoc.data.repository.RadarFOVRepository
 import com.ccs.radarpoc.databinding.ActivityMainBinding
 import com.ccs.radarpoc.ui.main.*
 import com.ccs.radarpoc.util.MapFileManager
@@ -41,9 +42,16 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
+import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.ScaleBarOverlay
 import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -92,6 +100,13 @@ class MainActivity : AppCompatActivity() {
     private var scaleBarOverlay: ScaleBarOverlay? = null
     private var rotationGestureOverlay: RotationGestureOverlay? = null
     
+    // FOV overlays
+    private lateinit var fovRepository: RadarFOVRepository
+    private val fovPolygons = mutableListOf<Polygon>()
+    private val boresightLines = mutableListOf<Polyline>()
+    private val radarMarkers = mutableListOf<Marker>()
+    private var fovPollingJob: Job? = null
+    
     // Current compass rotation for animation
     private var currentCompassRotation = 0f
     
@@ -131,6 +146,7 @@ class MainActivity : AppCompatActivity() {
         setupMapControls()
         setupTrackListDrawer()
         setupOSMDroid()
+        setupFOVPolling()
         setupDroneCamera()
         observeState()
         observeNavigation()
@@ -1120,6 +1136,82 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Setup FOV polling from radar server
+     */
+    private fun setupFOVPolling() {
+        val settings = AppSettings(this)
+        fovRepository = RadarFOVRepository(settings.radarBaseUrl)
+        
+        fovPollingJob = lifecycleScope.launch {
+            while(isActive) {
+                val result = fovRepository.fetchFOVData()
+                result.onSuccess { data ->
+                    withContext(Dispatchers.Main) {
+                        renderFOVOverlays(data)
+                    }
+                }
+                delay(settings.fovPollInterval * 1000L)
+            }
+        }
+    }
+    
+    /**
+     * Render FOV polygons, boresight lines, and radar markers on map
+     */
+    private fun renderFOVOverlays(data: com.ccs.radarpoc.data.model.RadarFOVData) {
+        val settings = AppSettings(this)
+        mapView?.let { map ->
+            // Clear old overlays
+            fovPolygons.forEach { map.overlays.remove(it) }
+            boresightLines.forEach { map.overlays.remove(it) }
+            radarMarkers.forEach { map.overlays.remove(it) }
+            fovPolygons.clear()
+            boresightLines.clear()
+            radarMarkers.clear()
+            
+            data.radars.forEach { radar ->
+                // FOV Polygon
+                if (settings.showFOV && radar.fov != null) {
+                    val polygon = Polygon(map).apply {
+                        points = radar.fov.points
+                        fillPaint.color = radar.fov.fillColor
+                        outlinePaint.color = radar.fov.strokeColor
+                        outlinePaint.strokeWidth = radar.fov.strokeWidth
+                    }
+                    map.overlays.add(0, polygon) // Add at bottom so tracks are on top
+                    fovPolygons.add(polygon)
+                }
+                
+                // Boresight Line
+                if (settings.showBoresight && radar.boresight != null) {
+                    val line = Polyline(map).apply {
+                        setPoints(listOf(radar.boresight.start, radar.boresight.end))
+                        outlinePaint.color = radar.boresight.color
+                        outlinePaint.strokeWidth = radar.boresight.width
+                    }
+                    map.overlays.add(line)
+                    boresightLines.add(line)
+                }
+                
+                // Radar Marker
+                if (settings.showRadarMarkers) {
+                    val marker = Marker(map).apply {
+                        position = radar.location
+                        title = radar.name
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_radar)
+                    }
+                    map.overlays.add(marker)
+                    radarMarkers.add(marker)
+                }
+            }
+            
+            map.invalidate()
+            android.util.Log.d(TAG, "✓ Rendered ${data.radarCount} radar FOV overlays")
+        }
+    }
+    
     override fun onResume() {
         super.onResume()
         mapView?.onResume() // OSMDroid lifecycle
@@ -1136,6 +1228,7 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         mapView?.onPause() // OSMDroid lifecycle
         viewModel.stopRadarPolling()
+        fovPollingJob?.cancel() // Stop FOV polling
     }
     
     override fun onDestroy() {

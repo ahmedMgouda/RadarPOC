@@ -26,7 +26,8 @@ sealed class Result<out T> {
 class RadarRepository(
     private val baseUrl: String,
     private val pollIntervalSeconds: Int,
-    private val staleTimeoutSeconds: Int
+    private val staleTimeoutSeconds: Int,
+    private val staleRemovalTimeoutSeconds: Int = 60 // Default 60s, 0 = never remove
 ) {
     companion object {
         private const val TAG = "RadarRepository"
@@ -83,15 +84,33 @@ class RadarRepository(
             is Result.Success -> {
                 val now = System.currentTimeMillis()
                 val staleTimeoutMs = staleTimeoutSeconds * 1000L
+                val removalTimeoutMs = staleRemovalTimeoutSeconds * 1000L
                 
-                // Mark stale tracks
-                val tracksWithStaleStatus = result.data.map { track ->
-                    track.copy().apply {
-                        isStale = (now - track.timestamp) > staleTimeoutMs
+                // Mark stale tracks and auto-remove old ones
+                val filteredTracks = result.data
+                    .filter { track ->
+                        // If removal timeout is 0, never remove (keep all tracks)
+                        if (staleRemovalTimeoutSeconds == 0) {
+                            true
+                        } else {
+                            // Remove tracks older than removal timeout
+                            val age = now - track.timestamp
+                            age < removalTimeoutMs
+                        }
                     }
+                    .map { track ->
+                        track.copy().apply {
+                            isStale = (now - track.timestamp) > staleTimeoutMs
+                        }
+                    }
+                
+                // Log auto-removal if tracks were removed
+                val removedCount = result.data.size - filteredTracks.size
+                if (removedCount > 0) {
+                    android.util.Log.d(TAG, "Auto-removed $removedCount stale tracks (older than ${staleRemovalTimeoutSeconds}s)")
                 }
                 
-                _tracks.value = tracksWithStaleStatus
+                _tracks.value = filteredTracks
                 
                 if (!_connectionState.value) {
                     _connectionState.value = true
