@@ -26,6 +26,12 @@ class AppSettings(context: Context) {
         private const val KEY_SHOW_SCALE_BAR = "show_scale_bar"
         private const val KEY_ENABLE_MAP_ROTATION = "enable_map_rotation"
         
+        // FOV Display Settings
+        private const val KEY_FOV_POLL_INTERVAL = "fov_poll_interval"
+        private const val KEY_SHOW_FOV = "show_fov"
+        private const val KEY_SHOW_BORESIGHT = "show_boresight"
+        private const val KEY_SHOW_RADAR_MARKERS = "show_radar_markers"
+        
         // Authentication Settings
         private const val KEY_AUTH_USERNAME = "auth_username"
         private const val KEY_AUTH_PASSWORD_HASH = "auth_password_hash"
@@ -42,6 +48,12 @@ class AppSettings(context: Context) {
         const val DEFAULT_SHOW_ZOOM_BUTTONS = true
         const val DEFAULT_SHOW_SCALE_BAR = true
         const val DEFAULT_ENABLE_MAP_ROTATION = false // Professional radar standard
+        
+        // FOV Display Defaults
+        const val DEFAULT_FOV_POLL_INTERVAL = 30 // seconds (FOV doesn't change often)
+        const val DEFAULT_SHOW_FOV = true
+        const val DEFAULT_SHOW_BORESIGHT = true
+        const val DEFAULT_SHOW_RADAR_MARKERS = true
         
         // Default credentials
         const val DEFAULT_USERNAME = "admin"
@@ -107,6 +119,39 @@ class AppSettings(context: Context) {
     var enableMapRotation: Boolean
         get() = prefs.getBoolean(KEY_ENABLE_MAP_ROTATION, DEFAULT_ENABLE_MAP_ROTATION)
         set(value) = prefs.edit().putBoolean(KEY_ENABLE_MAP_ROTATION, value).apply()
+    
+    // ========================================
+    // FOV Display Settings
+    // ========================================
+    
+    /**
+     * FOV polling interval in seconds
+     * FOV data doesn't change often, so longer intervals are OK
+     */
+    var fovPollInterval: Int
+        get() = prefs.getInt(KEY_FOV_POLL_INTERVAL, DEFAULT_FOV_POLL_INTERVAL)
+        set(value) = prefs.edit().putInt(KEY_FOV_POLL_INTERVAL, value).apply()
+    
+    /**
+     * Show/hide radar FOV polygons on map
+     */
+    var showFOV: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_FOV, DEFAULT_SHOW_FOV)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_FOV, value).apply()
+    
+    /**
+     * Show/hide boresight lines on map
+     */
+    var showBoresight: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_BORESIGHT, DEFAULT_SHOW_BORESIGHT)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_BORESIGHT, value).apply()
+    
+    /**
+     * Show/hide radar location markers on map
+     */
+    var showRadarMarkers: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_RADAR_MARKERS, DEFAULT_SHOW_RADAR_MARKERS)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_RADAR_MARKERS, value).apply()
     
     // ========================================
     // Authentication Settings
