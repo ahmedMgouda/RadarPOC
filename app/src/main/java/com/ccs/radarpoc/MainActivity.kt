@@ -22,13 +22,21 @@ import com.autel.sdk.widget.AutelCodecView
 import com.ccs.radarpoc.data.AppSettings
 import com.ccs.radarpoc.databinding.ActivityMainBinding
 import com.ccs.radarpoc.ui.main.*
+import com.ccs.radarpoc.util.MapFileManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.modules.ArchiveFileFactory
+import org.osmdroid.tileprovider.modules.IArchiveFile
+import org.osmdroid.tileprovider.modules.MapTileModuleProviderBase
+import org.osmdroid.tileprovider.modules.MapTileFileArchiveProvider
+import org.osmdroid.tileprovider.util.SimpleRegisterReceiver
+import org.osmdroid.tileprovider.MapTileProviderArray
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
+import java.io.File
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.pow
@@ -224,39 +232,171 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Setup OSMDroid map for offline operation
+     * Setup OSMDroid map with best practices
+     * Supports both online and offline modes with auto-detection
      */
     private fun setupOSMDroid() {
-        // Configure OSMDroid
-        Configuration.getInstance().load(
-            applicationContext,
-            getSharedPreferences("osmdroid", MODE_PRIVATE)
-        )
+        // Configure OSMDroid - MUST be done before using the map
+        Configuration.getInstance().apply {
+            load(applicationContext, getSharedPreferences("osmdroid", MODE_PRIVATE))
+            // Set user agent to avoid being blocked
+            userAgentValue = packageName
+            // Enable debugging if needed
+            isDebugMode = false
+            // Set cache size limits
+            tileFileSystemCacheMaxBytes = 100L * 1024 * 1024 // 100MB
+            tileFileSystemCacheTrimBytes = 80L * 1024 * 1024  // Trim to 80MB
+        }
         
         // Get MapView reference from layout
         mapView = binding.mapView
         
+        // Validate OSMDroid setup and check for offline maps
+        val validation = MapFileManager.validateSetup(this)
+        android.util.Log.d(TAG, "OSMDroid validation: ${validation.mapFilesFound} maps found in ${validation.mapsDirectory}")
+        
+        if (!validation.isValid) {
+            validation.issues.forEach { issue ->
+                android.util.Log.w(TAG, "OSMDroid issue: $issue")
+            }
+        }
+        
         // Configure map
         mapView?.apply {
-            // Set tile source (Mapnik = standard OpenStreetMap)
-            setTileSource(TileSourceFactory.MAPNIK)
+            // Load settings
+            val appSettings = AppSettings(this@MainActivity)
+            val selectedMapPath = appSettings.activeMapFilePath
+            var offlineMapLoaded = false
+            
+            // Priority 1: Use map selected in settings
+            if (selectedMapPath != null) {
+                val mapFile = File(selectedMapPath)
+                
+                if (mapFile.exists()) {
+                    android.util.Log.d(TAG, "Using selected map from settings: ${mapFile.name}")
+                    
+                    try {
+                        // Load offline archive file directly
+                        val archiveFile = ArchiveFileFactory.getArchiveFile(mapFile)
+                        
+                        if (archiveFile != null) {
+                            android.util.Log.d(TAG, "Successfully opened archive: ${mapFile.name}")
+                            
+                            // Create tile provider with the archive
+                            val archiveProvider = MapTileFileArchiveProvider(
+                                SimpleRegisterReceiver(this@MainActivity),
+                                TileSourceFactory.MAPNIK,
+                                arrayOf(archiveFile)
+                            )
+                            
+                            // Create tile provider array with our offline archive
+                            val tileProviderArray = MapTileProviderArray(
+                                TileSourceFactory.MAPNIK,
+                                SimpleRegisterReceiver(this@MainActivity),
+                                arrayOf<MapTileModuleProviderBase>(archiveProvider)
+                            )
+                            
+                            // Set the custom tile provider
+                            setTileProvider(tileProviderArray)
+                            setTileSource(TileSourceFactory.MAPNIK)
+                            setUseDataConnection(false) // Pure offline mode
+                            offlineMapLoaded = true
+                            
+                            val sizeMB = mapFile.length() / (1024.0 * 1024.0)
+                            android.util.Log.d(TAG, "Offline map loaded: ${mapFile.name} (${String.format("%.1f", sizeMB)} MB)")
+                            
+                            Toast.makeText(
+                                this@MainActivity,
+                                "✓ Offline map: ${mapFile.name}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            android.util.Log.e(TAG, "Could not open archive file: ${mapFile.name}")
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Invalid map file format",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e(TAG, "Failed to load selected map: ${mapFile.name}", e)
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Error loading map: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    android.util.Log.w(TAG, "Selected map file doesn't exist: $selectedMapPath")
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Map file not found",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            
+            // Priority 2: Auto-detect offline maps if none selected
+            if (!offlineMapLoaded) {
+                val mapFiles = MapFileManager.scanForMapFiles(this@MainActivity)
+                
+                if (mapFiles.isNotEmpty()) {
+                    // Use the most recent offline map file
+                    val autoDetectedMap = mapFiles.first()
+                    android.util.Log.d(TAG, "Auto-detected offline map: ${autoDetectedMap.name} (${autoDetectedMap.formattedSize})")
+                    
+                    try {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setUseDataConnection(false)
+                        offlineMapLoaded = true
+                        
+                        android.util.Log.d(TAG, "Offline map configured: ${autoDetectedMap.name}")
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Using offline map: ${autoDetectedMap.name}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } catch (e: Exception) {
+                        android.util.Log.e(TAG, "Failed to configure offline map", e)
+                    }
+                }
+            }
+            
+            // Priority 3: Fallback to online tiles
+            if (!offlineMapLoaded) {
+                android.util.Log.d(TAG, "No offline maps available, using online tiles")
+                setTileSource(TileSourceFactory.MAPNIK)
+                setUseDataConnection(true) // Enable internet for online tiles
+                
+                Toast.makeText(
+                    this@MainActivity,
+                    "Using online maps. Select offline map in Settings.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             
             // Enable multi-touch controls (pinch to zoom)
             setMultiTouchControls(true)
             
-            // Set initial position
+            // Set min/max zoom levels
+            minZoomLevel = 3.0
+            maxZoomLevel = 19.0
+            
+            // Set initial position (Cairo, Egypt)
             controller.setZoom(DEFAULT_ZOOM)
             controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LNG))
-            
-            // IMPORTANT: Enable offline mode for field deployment
-            setUseDataConnection(false) // Set to true if you need online tiles
             
             // Add marker click handler overlay
             setupMarkerClickListener()
             
             // Add map tap listener for closing bottom sheet
             setupMapTapListener()
+            
+            // Force initial render
+            invalidate()
         }
+        
+        android.util.Log.d(TAG, "OSMDroid setup complete")
     }
     
     /**

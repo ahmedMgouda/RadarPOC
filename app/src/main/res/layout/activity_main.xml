@@ -79,17 +79,11 @@
             <!-- Collapse Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCollapseTopBar"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:padding="0dp"
-                app:icon="@drawable/ic_chevron_up"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
-                app:iconTint="@android:color/white"
-                app:iconSize="24dp"
                 style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_chevron_up"
+                app:iconTint="@android:color/white"
                 android:contentDescription="@string/collapse_top_bar" />
 
             <!-- Status Icons -->
@@ -148,17 +142,11 @@
             <!-- Settings Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSettings"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:padding="0dp"
-                app:icon="@drawable/ic_settings"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
-                app:iconTint="@android:color/white"
-                app:iconSize="24dp"
                 style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_settings"
+                app:iconTint="@android:color/white"
                 android:contentDescription="@string/settings" />
 
         </LinearLayout>
@@ -272,33 +260,21 @@
             <!-- Lock Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnLockTrack"
+                style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:padding="0dp"
                 app:icon="@drawable/ic_lock_open"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
                 app:iconTint="@android:color/white"
-                app:iconSize="24dp"
-                style="@style/Widget.Material3.Button.IconButton"
                 android:contentDescription="@string/track_lock" />
 
             <!-- Close Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCloseTrackInfo"
+                style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:padding="0dp"
                 app:icon="@drawable/ic_close"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
                 app:iconTint="@android:color/white"
-                app:iconSize="24dp"
-                style="@style/Widget.Material3.Button.IconButton"
                 android:contentDescription="@string/dialog_cancel" />
 
         </LinearLayout>
@@ -417,13 +393,13 @@
             <!-- Action Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCenterOnTrack"
+                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/center_on_map"
                 app:icon="@drawable/ic_center"
-                app:iconGravity="textStart"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                app:iconGravity="textStart" />
 
         </LinearLayout>
 
