@@ -1,117 +1,426 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="320dp"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawerContainer"
+    android:layout_width="340dp"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#DD000000"
+    android:background="@drawable/bg_drawer"
     android:fitsSystemWindows="true">
 
-    <!-- Header -->
-    <com.google.android.material.card.MaterialCardView
+    <!-- Header with Gradient Background -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:cardElevation="4dp"
-        app:cardCornerRadius="0dp"
-        app:cardBackgroundColor="?attr/colorPrimary">
+        android:orientation="vertical"
+        android:background="@drawable/bg_drawer_header"
+        android:paddingTop="24dp"
+        android:paddingBottom="16dp"
+        android:paddingHorizontal="20dp">
 
+        <!-- Title Row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Radar Icon -->
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_radar"
+                app:tint="@android:color/white"
+                android:contentDescription="Radar" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp">
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="Active Tracks"
-                    android:textSize="20sp"
+                    android:textSize="22sp"
                     android:textStyle="bold"
-                    android:textColor="@color/white" />
+                    android:textColor="@android:color/white" />
+
+                <TextView
+                    android:id="@+id/tvLastUpdate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="#B0FFFFFF"
+                    android:layout_marginTop="2dp"
+                    tools:text="Updated 2s ago" />
+
+            </LinearLayout>
+
+            <!-- Track Count Badge -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:cardBackgroundColor="#33FFFFFF">
 
                 <TextView
                     android:id="@+id/tvDrawerTrackCount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:minWidth="40dp"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
                     android:text="0"
-                    android:textSize="24sp"
+                    android:textSize="18sp"
                     android:textStyle="bold"
-                    android:textColor="@color/white" />
+                    android:textColor="@android:color/white" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+        <!-- Stats Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical">
+
+            <!-- Active Count -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvActiveCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="#4CAF50" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Active"
+                    android:textSize="11sp"
+                    android:textColor="#B0FFFFFF"
+                    android:textAllCaps="true" />
+
             </LinearLayout>
 
-            <TextView
-                android:layout_width="match_parent"
+            <!-- Divider -->
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:background="#33FFFFFF" />
+
+            <!-- Stale Count -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Tap any track to navigate"
-                android:textSize="12sp"
-                android:textColor="#E0E0E0"
-                android:layout_marginTop="4dp" />
-            
-            <!-- Hide Stale Toggle -->
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/switchHideStale"
-                android:layout_width="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvStaleCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF9800" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Stale"
+                    android:textSize="11sp"
+                    android:textColor="#B0FFFFFF"
+                    android:textAllCaps="true" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="1dp"
+                android:layout_height="32dp"
+                android:background="#33FFFFFF" />
+
+            <!-- Locked Count -->
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Hide Stale Tracks"
-                android:textColor="@color/white"
-                android:textSize="14sp"
-                android:layout_marginTop="12dp"
-                app:thumbTint="@color/white"
-                app:trackTint="#80FFFFFF" />
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:id="@+id/tvLockedCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="#2196F3" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Locked"
+                    android:textSize="11sp"
+                    android:textColor="#B0FFFFFF"
+                    android:textAllCaps="true" />
+
+            </LinearLayout>
+
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+    <!-- Filter/Sort Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:background="#1A1A1A">
+
+        <!-- Filter Chips -->
+        <HorizontalScrollView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:scrollbars="none">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/filterChipGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipAll"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="All"
+                    android:textColor="@android:color/white"
+                    android:checked="true"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    app:chipBackgroundColor="@color/chip_background_color"
+                    app:chipStrokeColor="#444444"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipActive"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Active"
+                    android:textColor="@android:color/white"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    app:chipBackgroundColor="@color/chip_background_color"
+                    app:chipStrokeColor="#444444"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipStale"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Stale"
+                    android:textColor="@android:color/white"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    app:chipBackgroundColor="@color/chip_background_color"
+                    app:chipStrokeColor="#444444"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+            </com.google.android.material.chip.ChipGroup>
+
+        </HorizontalScrollView>
+
+        <!-- Sort Button -->
+        <ImageButton
+            android:id="@+id/btnSort"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_sort"
+            app:tint="#AAAAAA"
+            android:contentDescription="Sort" />
+
+    </LinearLayout>
+
+    <!-- Search Bar (Optional - for future use) -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/searchContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"
+        android:visibility="gone"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+        app:boxCornerRadiusBottomEnd="24dp"
+        app:boxCornerRadiusBottomStart="24dp"
+        app:boxCornerRadiusTopEnd="24dp"
+        app:boxCornerRadiusTopStart="24dp"
+        app:startIconDrawable="@drawable/ic_search"
+        app:hintEnabled="false"
+        tools:visibility="visible">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etSearch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Search tracks..."
+            android:inputType="text"
+            android:maxLines="1"
+            android:textColor="@android:color/white"
+            android:textColorHint="#888888" />
+
+    </com.google.android.material.textfield.TextInputLayout>
 
     <!-- Track List -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvTrackList"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:clipToPadding="false" />
+        android:layout_weight="1">
 
-    <!-- Empty State -->
-    <LinearLayout
-        android:id="@+id/llEmptyState"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:padding="32dp"
-        android:visibility="gone">
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvTrackList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:clipToPadding="false"
+            android:scrollbars="vertical"
+            android:scrollbarThumbVertical="@drawable/scrollbar_thumb"
+            android:scrollbarStyle="outsideOverlay" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📡"
-            android:textSize="48sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="No Active Tracks"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#666666"
-            android:layout_marginTop="16dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Tracks will appear here when detected"
-            android:textSize="14sp"
-            android:textColor="#999999"
+        <!-- Empty State -->
+        <LinearLayout
+            android:id="@+id/llEmptyState"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
             android:gravity="center"
-            android:layout_marginTop="8dp" />
+            android:padding="32dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <!-- Animated Radar Icon -->
+            <ImageView
+                android:id="@+id/ivEmptyRadar"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:src="@drawable/ic_radar"
+                app:tint="#444444" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No Tracks Detected"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#888888"
+                android:layout_marginTop="20dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tracks will appear here when the radar detects targets"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:gravity="center"
+                android:layout_marginTop="8dp"
+                android:layout_marginHorizontal="24dp" />
+
+            <!-- Connection Status -->
+            <LinearLayout
+                android:id="@+id/llConnectionStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="24dp"
+                android:padding="12dp"
+                android:background="@drawable/bg_status_chip">
+
+                <View
+                    android:id="@+id/vConnectionDot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_status_dot_red" />
+
+                <TextView
+                    android:id="@+id/tvConnectionStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Connecting to radar..."
+                    android:textSize="12sp"
+                    android:textColor="#AAAAAA" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Bottom Actions -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:background="#1A1A1A">
+
+        <!-- Clear All Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearLocks"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Clear Locks"
+            android:textColor="#AAAAAA"
+            app:icon="@drawable/ic_lock_open"
+            app:iconTint="#AAAAAA"
+            app:iconGravity="textStart"
+            style="@style/Widget.Material3.Button.TextButton" />
+
+        <!-- Refresh Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRefresh"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Refresh"
+            android:textColor="#AAAAAA"
+            app:icon="@drawable/ic_refresh"
+            app:iconTint="#AAAAAA"
+            app:iconGravity="textStart"
+            style="@style/Widget.Material3.Button.TextButton" />
+
     </LinearLayout>
 
 </LinearLayout>
