@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/trackCard"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="12dp"
-    android:layout_marginEnd="12dp"
-    android:layout_marginTop="4dp"
-    android:layout_marginBottom="4dp"
+    android:layout_marginHorizontal="12dp"
+    android:layout_marginVertical="4dp"
     app:cardElevation="2dp"
-    app:cardCornerRadius="8dp"
-    android:foreground="?attr/selectableItemBackground">
+    app:cardCornerRadius="12dp"
+    app:cardBackgroundColor="#2A2A2A"
+    app:strokeWidth="0dp"
+    android:foreground="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -18,14 +22,32 @@
         android:padding="12dp"
         android:gravity="center_vertical">
 
-        <!-- Color Indicator -->
-        <View
-            android:id="@+id/vTrackColor"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:background="#FF5722" />
+        <!-- Left: Color Indicator + Direction Arrow -->
+        <FrameLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp">
 
-        <!-- Track Info -->
+            <!-- Background Circle with Track Color -->
+            <View
+                android:id="@+id/vTrackColorBg"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_track_indicator" />
+
+            <!-- Direction Arrow (rotatable) -->
+            <ImageView
+                android:id="@+id/ivTrackDirection"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_navigation"
+                app:tint="@android:color/white"
+                android:rotation="45"
+                tools:rotation="45" />
+
+        </FrameLayout>
+
+        <!-- Middle: Track Info -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -33,50 +55,184 @@
             android:orientation="vertical"
             android:layout_marginStart="12dp">
 
-            <TextView
-                android:id="@+id/tvTrackId"
-                android:layout_width="wrap_content"
+            <!-- Track ID Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="T-123"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="#212121" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/tvTrackDistance"
-                android:layout_width="wrap_content"
+                <TextView
+                    android:id="@+id/tvTrackId"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/white"
+                    tools:text="Track 357" />
+
+                <!-- Locked Badge -->
+                <TextView
+                    android:id="@+id/tvLockedBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="2dp"
+                    android:text="🔒 LOCKED"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:textColor="#2196F3"
+                    android:background="@drawable/bg_badge_locked"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <!-- Stale Badge -->
+                <TextView
+                    android:id="@+id/tvStaleBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="2dp"
+                    android:text="STALE"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF9800"
+                    android:background="@drawable/bg_badge_stale"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+
+            <!-- Info Row 1: Distance + Speed -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="1.2km away"
-                android:textSize="12sp"
-                android:textColor="#666666"
-                android:layout_marginTop="2dp" />
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:src="@drawable/ic_distance"
+                    app:tint="#888888" />
+
+                <TextView
+                    android:id="@+id/tvTrackDistance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textSize="12sp"
+                    android:textColor="#AAAAAA"
+                    tools:text="1.2 km" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="10dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="#444444" />
+
+                <ImageView
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:src="@drawable/ic_speed"
+                    app:tint="#888888" />
+
+                <TextView
+                    android:id="@+id/tvTrackSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textSize="12sp"
+                    android:textColor="#AAAAAA"
+                    tools:text="45 m/s" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="10dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="#444444" />
+
+                <ImageView
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:src="@drawable/ic_altitude"
+                    app:tint="#888888" />
+
+                <TextView
+                    android:id="@+id/tvTrackAltitude"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textSize="12sp"
+                    android:textColor="#AAAAAA"
+                    tools:text="120m" />
+
+            </LinearLayout>
+
+            <!-- Info Row 2: Classification + Last Seen -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical">
+
+                <!-- Classification Chip -->
+                <TextView
+                    android:id="@+id/tvClassification"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="2dp"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:textColor="#4CAF50"
+                    android:background="@drawable/bg_classification_chip"
+                    tools:text="DRONE" />
+
+                <TextView
+                    android:id="@+id/tvLastSeen"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="11sp"
+                    android:textColor="#666666"
+                    tools:text="2s ago" />
+
+            </LinearLayout>
+
         </LinearLayout>
 
-        <!-- Status Icons -->
+        <!-- Right: Action Buttons -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:orientation="vertical"
+            android:gravity="center">
 
-            <!-- Stale Indicator -->
-            <TextView
-                android:id="@+id/tvStaleIndicator"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚫"
-                android:textSize="16sp"
-                android:visibility="gone"
-                android:layout_marginEnd="4dp" />
+            <!-- Lock/Unlock Button -->
+            <ImageButton
+                android:id="@+id/btnLockTrack"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_lock_open"
+                app:tint="#666666"
+                android:contentDescription="Lock track" />
 
-            <!-- Locked Indicator -->
-            <TextView
-                android:id="@+id/tvLockedIndicator"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🔒"
-                android:textSize="16sp"
-                android:visibility="gone" />
+            <!-- Center on Map Button -->
+            <ImageButton
+                android:id="@+id/btnCenterTrack"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_center"
+                app:tint="#666666"
+                android:contentDescription="Center on map" />
+
         </LinearLayout>
 
     </LinearLayout>
