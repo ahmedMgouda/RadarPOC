@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bottom Sheet -->
+    <dimen name="bottom_sheet_peek_height">180dp</dimen>
+    <dimen name="bottom_sheet_corner_radius">24dp</dimen>
+    
+    <!-- Track Item -->
+    <dimen name="track_item_height">64dp</dimen>
+    <dimen name="track_indicator_size">40dp</dimen>
+    
+    <!-- Drawer -->
+    <dimen name="drawer_width">340dp</dimen>
+    <dimen name="drawer_header_height">180dp</dimen>
+    
+    <!-- Touch targets -->
+    <dimen name="min_touch_target">48dp</dimen>
+</resources>

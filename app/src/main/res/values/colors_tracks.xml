@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Track Status Colors -->
+    <color name="track_active">#4CAF50</color>
+    <color name="track_stale">#FF9800</color>
+    <color name="track_locked">#2196F3</color>
+    
+    <!-- Track Item -->
+    <color name="track_item_background">#2A2A2A</color>
+    <color name="track_item_selected">#1A2196F3</color>
+    
+    <!-- Icon colors -->
+    <color name="icon_primary">#FFFFFF</color>
+    <color name="icon_secondary">#888888</color>
+    <color name="locked_track_color">#2196F3</color>
+    
+    <!-- Classification colors -->
+    <color name="classification_drone">#4CAF50</color>
+    <color name="classification_bird">#FF9800</color>
+    <color name="classification_unknown">#9E9E9E</color>
+</resources>
