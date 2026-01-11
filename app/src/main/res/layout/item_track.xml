@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Simplified Track Item for Drawer - Shows minimal info, details in bottom sheet -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -6,10 +7,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="12dp"
-    android:layout_marginVertical="4dp"
-    app:cardElevation="2dp"
+    android:layout_marginVertical="3dp"
+    app:cardElevation="1dp"
     app:cardCornerRadius="12dp"
-    app:cardBackgroundColor="#2A2A2A"
+    app:cardBackgroundColor="@color/track_item_background"
     app:strokeWidth="0dp"
     android:foreground="?attr/selectableItemBackground"
     android:clickable="true"
@@ -19,35 +20,37 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp"
+        android:paddingVertical="12dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
         android:gravity="center_vertical">
 
-        <!-- Left: Color Indicator + Direction Arrow -->
+        <!-- Left: Track Color Indicator with Direction -->
         <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp">
+            android:layout_width="40dp"
+            android:layout_height="40dp">
 
-            <!-- Background Circle with Track Color -->
+            <!-- Background Circle -->
             <View
                 android:id="@+id/vTrackColorBg"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:background="@drawable/bg_track_indicator" />
 
-            <!-- Direction Arrow (rotatable) -->
+            <!-- Direction Arrow -->
             <ImageView
                 android:id="@+id/ivTrackDirection"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_navigation"
                 app:tint="@android:color/white"
-                android:rotation="45"
-                tools:rotation="45" />
+                tools:rotation="45"
+                android:contentDescription="Track direction" />
 
         </FrameLayout>
 
-        <!-- Middle: Track Info -->
+        <!-- Middle: Track ID + Distance (Minimal Info) -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -55,7 +58,7 @@
             android:orientation="vertical"
             android:layout_marginStart="12dp">
 
-            <!-- Track ID Row -->
+            <!-- Track ID Row with Badges -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -66,175 +69,78 @@
                     android:id="@+id/tvTrackId"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
                     tools:text="Track 357" />
 
-                <!-- Locked Badge -->
-                <TextView
-                    android:id="@+id/tvLockedBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="2dp"
-                    android:text="🔒 LOCKED"
-                    android:textSize="9sp"
-                    android:textStyle="bold"
-                    android:textColor="#2196F3"
-                    android:background="@drawable/bg_badge_locked"
+                <!-- Locked Icon (instead of text badge) -->
+                <ImageView
+                    android:id="@+id/ivLockedIcon"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginStart="6dp"
+                    android:src="@drawable/ic_lock"
+                    app:tint="#2196F3"
                     android:visibility="gone"
-                    tools:visibility="visible" />
-
-                <!-- Stale Badge -->
-                <TextView
-                    android:id="@+id/tvStaleBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="2dp"
-                    android:text="STALE"
-                    android:textSize="9sp"
-                    android:textStyle="bold"
-                    android:textColor="#FF9800"
-                    android:background="@drawable/bg_badge_stale"
-                    android:visibility="gone"
-                    tools:visibility="visible" />
+                    tools:visibility="visible"
+                    android:contentDescription="Locked" />
 
             </LinearLayout>
 
-            <!-- Info Row 1: Distance + Speed -->
+            <!-- Distance + Classification (simplified) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:gravity="center_vertical">
-
-                <ImageView
-                    android:layout_width="12dp"
-                    android:layout_height="12dp"
-                    android:src="@drawable/ic_distance"
-                    app:tint="#888888" />
 
                 <TextView
                     android:id="@+id/tvTrackDistance"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textColor="#AAAAAA"
                     tools:text="1.2 km" />
 
                 <View
-                    android:layout_width="1dp"
-                    android:layout_height="10dp"
+                    android:layout_width="4dp"
+                    android:layout_height="4dp"
                     android:layout_marginHorizontal="8dp"
-                    android:background="#444444" />
+                    android:background="@drawable/bg_dot_separator" />
 
-                <ImageView
-                    android:layout_width="12dp"
-                    android:layout_height="12dp"
-                    android:src="@drawable/ic_speed"
-                    app:tint="#888888" />
-
-                <TextView
-                    android:id="@+id/tvTrackSpeed"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:textSize="12sp"
-                    android:textColor="#AAAAAA"
-                    tools:text="45 m/s" />
-
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="10dp"
-                    android:layout_marginHorizontal="8dp"
-                    android:background="#444444" />
-
-                <ImageView
-                    android:layout_width="12dp"
-                    android:layout_height="12dp"
-                    android:src="@drawable/ic_altitude"
-                    app:tint="#888888" />
-
-                <TextView
-                    android:id="@+id/tvTrackAltitude"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:textSize="12sp"
-                    android:textColor="#AAAAAA"
-                    tools:text="120m" />
-
-            </LinearLayout>
-
-            <!-- Info Row 2: Classification + Last Seen -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="4dp"
-                android:gravity="center_vertical">
-
-                <!-- Classification Chip -->
                 <TextView
                     android:id="@+id/tvClassification"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:paddingHorizontal="8dp"
-                    android:paddingVertical="2dp"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
+                    android:textSize="12sp"
                     android:textColor="#4CAF50"
-                    android:background="@drawable/bg_classification_chip"
+                    android:textStyle="bold"
                     tools:text="DRONE" />
-
-                <TextView
-                    android:id="@+id/tvLastSeen"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:textSize="11sp"
-                    android:textColor="#666666"
-                    tools:text="2s ago" />
 
             </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Right: Action Buttons -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <!-- Lock/Unlock Button -->
-            <ImageButton
-                android:id="@+id/btnLockTrack"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_lock_open"
-                app:tint="#666666"
-                android:contentDescription="Lock track" />
-
-            <!-- Center on Map Button -->
-            <ImageButton
-                android:id="@+id/btnCenterTrack"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_center"
-                app:tint="#666666"
-                android:contentDescription="Center on map" />
-
-        </LinearLayout>
+        <!-- Right: Status Indicator (Active/Stale) -->
+        <View
+            android:id="@+id/vStatusIndicator"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_status_dot_green"
+            tools:background="@drawable/bg_status_dot_red" />
 
     </LinearLayout>
+
+    <!-- Selection Highlight Border (shown when selected) -->
+    <View
+        android:id="@+id/vSelectionHighlight"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_track_selected"
+        android:visibility="gone"
+        tools:visibility="visible" />
 
 </com.google.android.material.card.MaterialCardView>
